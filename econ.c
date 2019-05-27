@@ -6,8 +6,10 @@
 
 
 
+#define MAX_ACTORS       1024*1024
 #define MAX_ITEMS        1024*1024
 #define MAX_CASHFLOW     1024*1024
+#define MAX_ASSETS       1024*1024
 #define MAX_COMMODITIES  1024
 
 
@@ -51,14 +53,16 @@ void Economy_tick(Economy* ec) {
 
 
 void Economy_init(Economy* ec) {
-	VECMP_INIT(&ec->cash, MAX_ITEMS);
+	VECMP_INIT(&ec->cash, MAX_ACTORS);
 	VECMP_INIT(&ec->cashflow, MAX_CASHFLOW);
 	
-	VECMP_INIT(&ec->actors, MAX_ITEMS);
+	VECMP_INIT(&ec->assets, MAX_ASSETS);
+	
+	VECMP_INIT(&ec->actors, MAX_ACTORS);
 	VECMP_INIT(&ec->cfDescriptions, MAX_CASHFLOW);
 	
 	ec->markets = calloc(1, sizeof(*ec->markets) * MAX_COMMODITIES);
-	for(uint32_t i = 0; i < MAX_COMMODITIES; i++) ec->markets[i] = i;
+	for(uint32_t i = 0; i < MAX_COMMODITIES; i++) ec->markets[i].commodity = i;
 	
 	ec->comNames = calloc(1, sizeof(*ec->comNames) * MAX_COMMODITIES);
 	
@@ -67,12 +71,15 @@ void Economy_init(Economy* ec) {
 
 econid_t Economy_AddActor(Economy* ec, char* name, money_t cash) {
 	econid_t id;
+	EcActor* ac;
 	
 	VECMP_INSERT(&ec->cash, cash);
 	id = VECMP_LAST_INS_INDEX(&ec->cash);
 	char* n = strdup(name);
 	
-	VECMP_ITEM(&ec->names, id) = n;
+	ac = &VECMP_ITEM(&ec->actors, id);
+	ac->id = id;
+	ac->name = n;
 	
 	
 	return id;
@@ -105,6 +112,37 @@ econid_t Economy_AddCashflow(
 	return id;
 }
 
+
+
+econid_t Economy_AddAsset(Economy* ec, EcAsset* ass) {
+	econid_t id;
+	
+	VECMP_INSERT(&ec->assets, *ass);
+	ass = VECMP_LAST_INSERT(&ec->assets);
+	id = VECMP_LAST_INS_INDEX(&ec->cash);
+	ass->id = id;
+	
+	return id;
+}
+
+
+int Economy_BuyAsset(Economy* ec, EcAsset* ass, EcActor* buyer, money_t price) {
+	
+	money_t* bal = &VEC_ITEM(&ec->cash, buyer->id);
+	if(*bal < price) {
+		// TODO: log fault
+		return 1;
+	}
+	
+	ass->purchasePrice = price;
+	ass->curEstValue = price;
+	ass->buyNowPrice = price * 2;
+	ass->owner = buyer->id;
+	
+	*bal -= price;
+	
+	return 0;
+}
 
 
 

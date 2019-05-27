@@ -7,6 +7,14 @@
 #include "econ.h"
 
 
+static EcAsset g_assets[] = {
+	{0, 0, 1, 0, 1000, 2500, "Parcel 1"},
+	{0, 0, 1, 0, 1000, 2500, "Parcel 2"},
+	{0, 0, 1, 0, 1000, 2500, "Parcel 3"},
+	{0, 0, 1, 0, 1000, 2500, "Parcel 4"},
+	{UINT32_MAX},
+};
+
 
 
 static void print_cash(Economy* ec, int count);
@@ -17,6 +25,7 @@ int main(int argc, char* argv[]) {
 	
 	Economy_init(&ec);
 	
+	Economy_AddActor(&ec, "Nobody", 100);
 	Economy_AddActor(&ec, "A", 100);
 	Economy_AddActor(&ec, "B", 100);
 	Economy_AddActor(&ec, "C", 100);
@@ -24,6 +33,10 @@ int main(int argc, char* argv[]) {
 	Economy_AddActor(&ec, "E", 100);
 	
 	Economy_AddCashflow(&ec, 30, 0, 1, 1, "Pay me");
+	
+	for(int i = 0; g_assets[i].id != UINT32_MAX; i++) {
+		Economy_AddAsset(&ec, &g_assets[i]);
+	}
 	
 	
 	
@@ -51,10 +64,10 @@ int main(int argc, char* argv[]) {
 
 static void print_cash(Economy* ec, int count) {
 	for(int i = 0; i < VECMP_LEN(&ec->cash); i++) {
-		printf("%d: $%d '%s'\n",
+		printf("%d: $%ld '%s'\n",
 			i,
 			VECMP_ITEM(&ec->cash, i), 
-			VECMP_ITEM(&ec->names, i) 
+			VECMP_ITEM(&ec->actors, i).name 
 		);
 	}
 }
@@ -64,6 +77,9 @@ static void print_cash(Economy* ec, int count) {
 
 
 
+// 
 
-
-
+// static void farmer_fn(Ec) {
+// 	
+// }
+// 

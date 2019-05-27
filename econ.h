@@ -13,6 +13,11 @@ typedef uint32_t econid_t;
 #define ECON_MAGIC (INT64_MAX - 1)
 #define ECON_CASHMAX (INT64_MAX - 10)
 
+enum EcAssetType {
+	ECASST_MISC = 0,
+	ECASST_LAND = 1,
+	ECASST_MINE = 2,
+};
 
 
 
@@ -24,7 +29,10 @@ typedef struct EcCashflow {
 
 
 typedef struct EcAsset {
+	econid_t id;
 	econid_t owner;
+	econid_t type;
+	econid_t location;
 	money_t purchasePrice; // last purchase price
 	money_t curEstValue;
 	money_t buyNowPrice;
@@ -39,12 +47,13 @@ typedef struct EcMarketOrder {
 
 
 typedef struct EcMarket {
-	econcom_t commodity;
+	econid_t commodity;
 	VEC(EcMarketOrder) asks;
 	VEC(EcMarketOrder) bids;
 } EcMarket;
 
 typedef struct EcActor {
+	econid_t id;
 	char* name;
 	// type, ie, person or corporation
 	// occupation
@@ -57,7 +66,10 @@ typedef struct Economy {
 	VECMP(money_t) cash; // this is the primary array.
 	VECMP(EcCashflow) cashflow;
 	
-	// debt
+	VECMP(EcAsset) assets;
+	
+	// TODO: debt
+	
 	EcMarket* markets;
 	char** comNames;
 	
@@ -71,6 +83,8 @@ void Economy_tick(Economy* ec);
 
 econid_t Economy_AddActor(Economy* ec, char* name, money_t cash);
 econid_t Economy_AddCashflow(Economy* ec, money_t amount, econid_t from, econid_t to, uint32_t freq, char* desc);
+econid_t Economy_AddAsset(Economy* ec, EcAsset* ass);
+
 void Economy_init(Economy* ec);
 
 
