@@ -2,12 +2,17 @@
 #include <stdint.h>
 
 
+#include "c3dlas/c3dlas.h"
+
 #include "mempool.h"
 #include "ds.h"
 
 
 typedef int64_t money_t;
+typedef uint32_t entityid_t;
+typedef uint32_t compid_t;
 typedef uint32_t econid_t;
+typedef uint32_t tick_t; // 4 billion tick limit to world sim time
 
 
 #define ECON_MAGIC (INT64_MAX - 1)
@@ -21,10 +26,16 @@ enum EcAssetType {
 
 
 
+
+
+
+
+
+
 typedef struct EcCashflow {
 	econid_t from, to;
 	money_t amount;
-	uint32_t frequency; // ticks, which are days for now
+	tick_t frequency;
 } EcCashflow;
 
 
@@ -40,9 +51,23 @@ typedef struct EcAsset {
 } EcAsset;
 
 
+typedef struct EcWarehouse {
+
+} EcWarehouse;
+
+#define ECORDERTYPE_ASK 0x00
+#define ECORDERTYPE_BID 0x01
+#define ECORDERTYPE_MARKET 0x00
+#define ECORDERTYPE_LIMIT 0x02
+#define ECORDERTYPE_M_ASKBID 0x01
+#define ECORDERTYPE_M_MARLIM 0x02
+
+
 typedef struct EcMarketOrder {
+	unsigned char type; 
 	money_t price;
 	uint32_t qty; // 0 for unlimited
+	econid_t who;
 } EcMarketOrder;
 
 
@@ -61,23 +86,198 @@ typedef struct EcActor {
 } EcActor;
 
 
+
+#define ENTITY_TYPE_LIST \
+	X(Parcel) \
+	X(Mine) \
+	X(Factory) \
+	X(Company) \
+	X(Store) \
+	X(Person)
+
+#define COMP_TYPE_LIST \
+	X(Position) \
+	X(Movement) \
+	X(Money) \
+	X(PathFollow) \
+
+
+enum EntityType {
+	ET_None = 0,
+	
+#define X(x) ET_##x,
+	ENTITY_TYPE_LIST
+#undef X
+	
+	ET_MAXVALUE,
+};
+
+
+/*
+
+
+
+
+*/
+typedef struct Entity {
+	unsigned int dead : 1;
+	unsigned int _pad : 23;
+	unsigned int uniqueCounter : 8;
+	
+	tick_t created;
+	
+	enum EntityType type;
+	
+	
+	econid_t money;
+	econid_t position;
+	econid_t movement;
+	econid_t pathFollow;
+	
+	void* userData;
+	
+	// for debugging:
+	char* name;
+} Entity;
+
+
+
+
+typedef struct Money {
+	money_t cash;
+	money_t totalDebt;
+	money_t totalAssets;
+} Money;
+
+typedef struct Position {
+	Vector p;
+} Position;
+
+typedef struct Movement {
+	Vector direction;
+	float vel;
+	float acc;
+	float maxVel;
+	float maxAcc;
+} Movement;
+
+
+typedef struct Path {
+	VEC(Vector) nodes;
+	float totalLength;
+} Path;
+
+typedef struct PathFollow {
+	Path* p;
+	int a, b; // moving from a to b
+	float segmentProgress;
+	float totalProgress;
+} PathFollow;
+
+
+// TODO: get rid of this in favor of CPosition
+typedef struct Location {
+	int x, y;
+} Location;
+
+typedef struct Parcel {
+	entityid_t id;
+	
+	Location loc;
+	money_t price;
+	int minerals;
+	
+	entityid_t owner;
+	entityid_t structure;
+} Parcel;
+
+
+typedef struct Company {
+	entityid_t id;
+	
+	char* name;
+	VEC(entityid_t) parcels;
+	VEC(entityid_t) mines;
+	VEC(entityid_t) factories;
+	
+} Company;
+
+
+typedef struct Mine {
+	entityid_t id;
+	
+	Location loc;
+	entityid_t parcel;
+	
+	int metals;
+	
+} Mine;
+
+
+typedef struct Factory {
+	entityid_t id;
+	
+	Location loc;
+	entityid_t parcel;
+	
+	
+} Factory;
+
+
+typedef struct Person {
+	
+} Person;
+
+typedef struct Store {
+	
+} Store;
+
+
+
 typedef struct Economy {
 	// processed every tick
-	VECMP(money_t) cash; // this is the primary array.
 	VECMP(EcCashflow) cashflow;
 	
-	VECMP(EcAsset) assets;
+// 	VECMP(EcAsset) assets;
 	
 	// TODO: debt
 	
-	EcMarket* markets;
-	char** comNames;
+// 	EcMarket* markets;
+// 	char** comNames;
 	
-	VECMP(EcActor) actors;
-	VECMP(char*) cfDescriptions;
+// 	VECMP(EcActor) actors;
+// 	VECMP(char*) cfDescriptions;
+	
+	size_t entityCounts[ET_MAXVALUE];
+	
+	
+	VECMP(Entity) Entity;
+	
+	
+	#define X(type) VECMP(type) type;
+		ENTITY_TYPE_LIST
+	#undef X
+	
+	#define X(type) VECMP(type) type;
+		COMP_TYPE_LIST
+	#undef X
+	
+	
+	// temporary junk:
+	
+	entityid_t parcelGrid[64][64];
+	
 } Economy;
 
 
+// tick loop functions
+#define X(type) void tick##type(Economy* ec);
+	ENTITY_TYPE_LIST
+#undef X
+
+#define X(type) compid_t Econ_NewComp##type(Economy* ec, type* out);
+	ENTITY_TYPE_LIST
+#undef X
 
 void Economy_tick(Economy* ec);
 

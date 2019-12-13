@@ -544,8 +544,111 @@ do {
 
 
 
+// heap
+
+/*
+
+// declare a heap
+#define HEAP(t) \
+struct { \
+	size_t len, alloc, height; \
+	t* data; \
+}
+
+// initialisze a vector
+#define HEAP_INIT(x) \
+do { \
+	(x)->data = NULL; \
+	(x)->len = 0; \
+	(x)->alloc = 0; \
+	(x)->height = 0; \
+} while(0)
 
 
+// helpers
+#define HEAP_LEN(x) ((x)->len)
+#define HEAP_ALLOC(x) ((x)->alloc)
+#define HEAP_HEIGHT(x) ((x)->height)
+#define HEAP_DATA(x) ((x)->data)
+#define HEAP_ITEM(x, i) (HEAP_DATA(x)[(i)])
+
+#define HEAP_TAIL(x) (HEAP_DATA(x)[HEAP_LEN(x)-1])
+#define HEAP_HEAD(x) (HEAP_DATA(x)[0])
+#define HEAP_PEEK(x) HEAD_HEAD(x)
+
+
+// check if a size increase is needed to insert one more item
+#define HEAP_CHECK(x) \
+do { \
+	if(HEAP_LEN(x) >= HEAP_ALLOC(x)) { \
+		HEAP_GROW(x); \
+	} \
+} while(0)
+*/
+
+// operations
+/*
+static void heap_down_min_i32(void* data, size_t stride, size_t int_offset) {
+	int i = 0;
+	int i1, i2, len;
+	
+START:
+	i1 = i * 2 + 1;
+	i2 = i1 + 1;
+	
+#define int_at(n) (*((uint32_t*)(data + (n * stride + int_offset))))
+	
+	if(len < i1) return;
+	
+	uint32_t x = int_at(i);
+	
+	if(x > int_at(i1)) {
+		// swap, recurse
+		i = i1;
+		goto START;
+	}
+	
+	if(len < i2) return;
+	if(x > int_at(i2)) {
+		// swap, recurse
+		i = i2;
+		goto START;
+	}
+	
+	
+}
+*/
+/*
+// increase size and assign the new entry
+#define HEAP_INSERT(x, e) \
+do { \
+	HEAP_CHECK(x); \
+	HEAP_DATA(x)[HEAP_LEN(x)] = (e); \
+	HEAP_LEN(x)++; \
+} while(0)
+
+#define HEAP_POP(x) 
+do { \
+	HEAP_CHECK(x); \
+	HEAP_LEN(x)++; \
+} while(0)
+
+
+
+
+#define HEAP_FREE(x) \
+do { \
+	if(HEAP_DATA(x)) free(HEAP_DATA(x)); \
+	HEAP_DATA(x) = NULL; \
+	HEAP_LEN(x) = 0; \
+	HEAP_ALLOC(x) = 0; \
+	HEAP_HEIGHT(x) = 0; \
+} while(0)
+
+
+
+
+*/
 
 
 
