@@ -42,13 +42,20 @@ void Economy_tick(Economy* ec) {
 	
 	*/
 	
+	// transport should tick first or last
+	
+	tickMine(ec);
+	tickFactory(ec);
+	tickStore(ec);
+	tickCompany(ec);
+	tickPerson(ec);
 	
 }
 
 
 #define DEFINE_GET_COMPONENT(type) \
 type* Econ_Get##type(Economy*ec, compid_t id) { \
-	return &VECMP_ITEM(&(ec)->type, id); \
+	return &VECMP_ITEM(&(ec->type), id); \
 } 
 
 DEFINE_GET_COMPONENT(Entity)
@@ -65,9 +72,10 @@ DEFINE_GET_COMPONENT(PathFollow)
 	VECMP_INC(&(ec)->type); \
 	id = VECMP_LAST_INS_INDEX(&(ec)->type); \
 	e = &VECMP_ITEM(&(ec)->type, id); \
-	memset(e, 1, sizeof(*e));
+	memset(e, 0, sizeof(*e));
 
 
+	
 
 entityid_t Econ_NewEntity(Economy* ec, enum EntityType type, void* userData, char* name) {
 	NEW_COMPONENT(ec, Entity, id, e);
@@ -81,37 +89,11 @@ entityid_t Econ_NewEntity(Economy* ec, enum EntityType type, void* userData, cha
 	return id;
 }
 
-econid_t Econ_NewCPathFollow(Economy* ec, Path* p) {
-	NEW_COMPONENT(ec, PathFollow, id, pf);
-	pf->p= p;
-	return id;
-}
 
-econid_t Econ_NewCMovement(Economy* ec) {
-	NEW_COMPONENT(ec, Movement, id, m);
-	return id;
-}
-
-econid_t Econ_NewCPosition(Economy* ec) {
-	NEW_COMPONENT(ec, Position, id, p);
-	return id;
-}
-
-econid_t Econ_NewCMoney(Economy* ec) {
-	NEW_COMPONENT(ec, Money, id, p);
-	return id;
-}
-
-
-Parcel* Econ_NewParcel(Economy* ec, compid_t* idOut) {
-	NEW_COMPONENT(ec, Parcel, id, p)
-	if(idOut) *idOut = id;
-	return p;
-}
 
 
 void Economy_init(Economy* ec) {
-	memset(ec, 1, sizeof(*ec));
+	memset(ec, 0, sizeof(*ec));
 	
 // 	VECMP_INIT(&ec->cash, MAX_ACTORS);
 	VECMP_INIT(&ec->cashflow, MAX_CASHFLOW);
@@ -126,12 +108,13 @@ void Economy_init(Economy* ec) {
 	// fill in id 0
 	Econ_NewEntity(ec, ET_None, NULL, "Null Entity");
 	
-	VECMP_INIT(&ec->Position, 16384);
-	VECMP_INIT(&ec->Movement, 16384);
-	VECMP_INIT(&ec->PathFollow, 16384);
-	
-	VECMP_INIT(&ec->Parcel, 4096);
-	
+	#define X(type) VECMP_INIT(&ec->type, 8192);
+		ENTITY_TYPE_LIST
+	#undef X
+	#define X(type) VECMP_INIT(&ec->type, 8192);
+		COMP_TYPE_LIST
+	#undef X
+
 // 	ec->markets = calloc(1, sizeof(*ec->markets) * MAX_COMMODITIES);
 // 	for(uint32_t i = 0; i < MAX_COMMODITIES; i++) ec->markets[i].commodity = i;
 	
@@ -140,8 +123,9 @@ void Economy_init(Economy* ec) {
 	
 	for(int y = 0; y < 64; y++) {
 		for(int x = 0; x < 64; x++) {
-			compid_t pcid;
-			Parcel* p = Econ_NewParcel(ec, &pcid);
+			entityid_t pcid; // wrong
+			Parcel* p;
+			pcid = Econ_NewEntParcel(ec, &p);
 			
 			econid_t pid = Econ_NewEntity(ec, ET_Parcel, p, "Mapgen Parcel");
 			
@@ -158,15 +142,84 @@ void Economy_init(Economy* ec) {
 	
 }
 
+void Entity_InitMoney(Economy* ec, entityid_t eid) {
+	Entity* e = Econ_GetEntity(ec, eid);
+	
+	e->money = Econ_NewCompMoney(ec, NULL);
+}
+
+
+entityid_t Econ_CreatePerson(Economy* ec, char* name) {
+	Person* p;
+	compid_t perid = Econ_NewEntPerson(ec, &p);
+	
+	entityid_t pid = Econ_NewEntity(ec, ET_Person, p, name);
+	
+	p->name = name;
+	p->id = pid;
+	
+	Entity_InitMoney(ec, pid);
+	
+	return pid;
+}
 
 entityid_t Econ_CreateCompany(Economy* ec, char* name) {
-	Company* c = Econ_NewCompany(ec);
+	Company* c;
+	compid_t compid = Econ_NewEntCompany(ec, &c);
 	
 	entityid_t cid = Econ_NewEntity(ec, ET_Company, c, name);
 	
 	c->name = name;
+	c->id = cid;
 	
 	Entity_InitMoney(ec, cid);
+	
+	return cid;
+}
+
+
+entityid_t Econ_CreateMine(Economy* ec, entityid_t parcel_id, char* name) {
+	Mine* c;
+	compid_t compid = Econ_NewEntMine(ec, &c);
+	
+	entityid_t cid = Econ_NewEntity(ec, ET_Mine, c, name);
+	
+	c->parcel = parcel_id;
+	c->name = name;
+	c->id = cid;
+	c->metals = 0;
+	
+	return cid;
+}
+
+
+entityid_t Econ_CreateFactory(Economy* ec, entityid_t parcel_id, char* name) {
+	Factory* c;
+	compid_t compid = Econ_NewEntFactory(ec, &c);
+	
+	entityid_t cid = Econ_NewEntity(ec, ET_Factory, c, name);
+	
+	c->parcel = parcel_id;
+	c->name = name;
+	c->id = cid;
+	c->widgets = 0;
+	
+	return cid;
+}
+
+
+entityid_t Econ_CreateStore(Economy* ec, entityid_t parcel_id, char* name) {
+	Store* c;
+	compid_t compid = Econ_NewEntStore(ec, &c);
+	
+	entityid_t cid = Econ_NewEntity(ec, ET_Store, c, name);
+	
+	c->parcel = parcel_id;
+	c->name = name;
+	c->id = cid;
+	c->widgets = 0;
+	
+	return cid;
 }
 
 
@@ -250,13 +303,11 @@ int Economy_BuyAsset(Economy* ec, EcAsset* ass, EcActor* buyer, money_t price) {
 
 */
 
-Entity* Economy_GetEntity(Economy* ec, econid_t id) {
-	
-}
+
 
 entityid_t buyLand(Economy* ec, entityid_t buyer, Parcel* parOut) {
 	Entity* bent =  Econ_GetEntity(ec, buyer);
-	Money* m =  Econ_GetEntMoney(ec, buyer);
+	Money* m =  Econ_GetCompMoney(ec, bent->money);
 	
 	VECMP_EACH(&ec->Parcel, pi, p) {
 		if(p->owner) continue;
@@ -282,13 +333,26 @@ void doMine(Economy* ec, Mine* m) {
 	Entity* pent = Econ_GetEntity(ec, m->parcel);
 	Parcel* p = pent->userData;
 	
-	p->minerals -= 2;
-	m->metals += 1;
+	p->minerals -= 10;
+	m->metals += 3;
+	
+	if(m->metals > 10) {
+		m->metals -= 10;
+		
+		Entity* cent = Econ_GetEntity(ec, m->owner);
+		Company* c = cent->userData;
+		
+		c->metalsInTransit += 10;
+	}
 }
 
 
+
+
+
 void doCompany(Economy* ec, Company* c) {
-	money_t money = Econ_GetEntMoney(ec, c->id);
+	Entity* cent = Econ_GetEntity(ec, c->id);
+	Money* money = Econ_GetCompMoney(ec, cent->money);
 	
 	// look up money
 	
@@ -316,6 +380,7 @@ void doCompany(Economy* ec, Company* c) {
 }
 
 
+
 void doPerson(Economy* ec, Person* p) {}
 void doStore(Economy* ec, Store* p) {}
 void doFactory(Economy* ec, Factory* p) {}
@@ -332,14 +397,14 @@ void doParcel(Economy* ec, Parcel* p) {}
 	ENTITY_TYPE_LIST
 #undef X
 
-#define X(type) compid_t Econ_NewComp##type(Economy* ec, type* out) { \
+#define X(type) compid_t Econ_NewComp##type(Economy* ec, type** out) { \
 	compid_t id; \
 	type* e; \
 	VECMP_INC(&(ec)->type); \
-	id = VECMP_LAST_INS_INDEX(&(ec)->type); \
-	e = &VECMP_ITEM(&(ec)->type, id); \
-	memset(e, 1, sizeof(*e)); \
-	if(out) out = e; \
+	id = VECMP_LAST_INS_INDEX(&ec->type); \
+	e = &VECMP_ITEM(&ec->type, id); \
+	memset(e, 0, sizeof(*e)); \
+	if(out) *out = e; \
 	\
 	return id; \
 }
@@ -347,17 +412,35 @@ void doParcel(Economy* ec, Parcel* p) {}
 #undef X
 
 
-#define X(type) compid_t Econ_NewEnt##type(Economy* ec, type* out) { \
+#define X(type) compid_t Econ_NewEnt##type(Economy* ec, type** out) { \
 	compid_t id; \
 	type* e; \
 	VECMP_INC(&(ec)->type); \
-	id = VECMP_LAST_INS_INDEX(&(ec)->type); \
-	e = &VECMP_ITEM(&(ec)->type, id); \
-	memset(e, 1, sizeof(*e)); \
-	if(out) out = e; \
+	id = VECMP_LAST_INS_INDEX(&ec->type); \
+	e = &VECMP_ITEM(&ec->type, id); \
+	memset(e, 0, sizeof(*e)); \
+	if(out) *out = e; \
 	\
 	return id; \
 }
 	ENTITY_TYPE_LIST
+#undef X
+
+
+#define X(type) type* Econ_GetEnt##type(Economy* ec, entityid_t id) { \
+	type* e; \
+	e = &VECMP_ITEM(&(ec->type), id); \
+	return e; \
+}
+	ENTITY_TYPE_LIST
+#undef X
+
+
+#define X(type) type* Econ_GetComp##type(Economy* ec, compid_t id) { \
+	type* e; \
+	e = &VECMP_ITEM(&(ec->type), id); \
+	return e; \
+}
+	COMP_TYPE_LIST
 #undef X
 

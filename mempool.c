@@ -127,7 +127,6 @@ void MemPoolT_init(MemPoolT* mp, size_t itemSize, size_t maxItems) {
 
 
 static inline void mpt_check_bitfield(MemPoolT* mp) {
-	printf("bf alloc: %ld\n", mp->bitfieldAlloc);
 	if((mp->fill / 64) + ((mp->fill % 64) > 0) >= mp->bitfieldAlloc) {
 		mp->bitfieldAlloc = mp->bitfieldAlloc < 8 ? 8 : mp->bitfieldAlloc * 2;
 		mp->bitfield = realloc(mp->bitfield, sizeof(*mp->bitfield) * mp->bitfieldAlloc);
@@ -209,16 +208,16 @@ void* MemPoolT_getNextUsedIndex(MemPoolT* mp, size_t* index) {
 	if(mp->fill <= 0) return NULL;
 	
 	while(!mpt_get_bit(mp, *index + 1)) {
-		*index++;
+		(*index)++;
 		
 		if(*index >= mp->highestUsed - 1) {
 			return NULL;
 		}
 	}
-
+	
 	if(*index >= mp->highestUsed - 1) return NULL;
 	
-	return mp->pool + (*index * mp->itemSize);
+	return mp->pool + ((*index) * mp->itemSize);
 }
 
 

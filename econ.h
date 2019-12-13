@@ -200,14 +200,19 @@ typedef struct Company {
 	VEC(entityid_t) mines;
 	VEC(entityid_t) factories;
 	
+	int metalsInTransit;
+	
 } Company;
 
 
 typedef struct Mine {
 	entityid_t id;
+	char* name;
 	
 	Location loc;
 	entityid_t parcel;
+	entityid_t owner;
+	
 	
 	int metals;
 	
@@ -216,19 +221,30 @@ typedef struct Mine {
 
 typedef struct Factory {
 	entityid_t id;
+	char* name;
 	
 	Location loc;
+	entityid_t owner;
 	entityid_t parcel;
 	
+	int metals;
+	int widgets;
 	
 } Factory;
 
 
 typedef struct Person {
+	entityid_t id;
+	char* name;
 	
 } Person;
 
 typedef struct Store {
+	entityid_t id;
+	char* name;
+	
+	entityid_t parcel;
+	int widgets;
 	
 } Store;
 
@@ -275,8 +291,17 @@ typedef struct Economy {
 	ENTITY_TYPE_LIST
 #undef X
 
-#define X(type) compid_t Econ_NewComp##type(Economy* ec, type* out);
+#define X(type) entityid_t Econ_NewEnt##type(Economy* ec, type** out);
 	ENTITY_TYPE_LIST
+#undef X
+
+#define X(type) compid_t Econ_NewComp##type(Economy* ec, type** out);
+	COMP_TYPE_LIST
+#undef X
+
+
+#define X(type) type* Econ_GetComp##type(Economy* ec, compid_t id);
+	COMP_TYPE_LIST
 #undef X
 
 void Economy_tick(Economy* ec);
@@ -286,5 +311,10 @@ econid_t Economy_AddCashflow(Economy* ec, money_t amount, econid_t from, econid_
 econid_t Economy_AddAsset(Economy* ec, EcAsset* ass);
 
 void Economy_init(Economy* ec);
+Entity* Econ_GetEntity(Economy* ec, econid_t eid);
 
-
+entityid_t Econ_CreateCompany(Economy* ec, char* name);
+entityid_t Econ_CreatePerson(Economy* ec, char* name);
+entityid_t Econ_CreateMine(Economy* ec, entityid_t parcel_id, char* name);
+entityid_t Econ_CreateFactory(Economy* ec, entityid_t parcel_id, char* name);
+entityid_t Econ_CreateStore(Economy* ec, entityid_t parcel_id, char* name);

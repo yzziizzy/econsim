@@ -66,7 +66,7 @@ void MemPool_free(MemPool* mp, void* ptr);
 
 
 
-typedef struct MemPoolT /* racked */ {
+typedef struct MemPoolT /* tracked */ {
 	
 	size_t itemSize;
 	size_t maxItems;
@@ -111,9 +111,8 @@ static inline void* MemPoolT_getIndex(MemPoolT* mp, size_t index) {
 
 // garbage in, garbage out. you have been warned.
 static inline size_t MemPoolT_indexOf(MemPoolT* mp, void* ptr) { 
-	return (ptr - mp->pool) / mp->itemSize;
+       return (ptr - mp->pool) / mp->itemSize;
 }
-
 
 
 // VECMP is a set of typesafe vector macros built around a tracked mempool
@@ -131,7 +130,7 @@ struct { \
 #define VECMP_INIT(x, maxItems) \
 do { \
 	(x)->lastInsert = NULL; \
-	MemPoolT_init(&(x)->pool, sizeof(*(x)->lastInsert), maxItems); \
+	MemPoolT_init(&(x)->pool, sizeof(*((x)->lastInsert)), maxItems); \
 } while(0)
 
 
@@ -160,12 +159,12 @@ do { \
 #define VECMP_LEN(x) ((x)->pool.fill) 
 #define VECMP_OWNS_PTR(x, ptr) (MemPoolT_ownsPointer(&(x)->pool, ptr)) 
 
-
-#define VECMP_DATA(x) ((typeof((x)->lastInsert))(x)->pool.pool)
+#define VECMP_DATA(x) ( (typeof((x)->lastInsert)) ((x)->pool.pool) )
 #define VECMP_ITEM(x, index) (VECMP_DATA(x)[index])
 
 #define VECMP_INDEXOF(x, ptr) (MemPoolT_indexOf(&(x)->pool, ptr))
 #define VECMP_LAST_INS_INDEX(x) (MemPoolT_indexOf(&(x)->pool, (x)->lastInsert))
+
 
 
 
