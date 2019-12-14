@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include <unistd.h>
 #include <ncurses.h>
 
 #ifndef CTRL_KEY
@@ -14,8 +15,6 @@
 
 
 static void print_companies(Economy* ec);
-
-
 static void print_mines(Economy* ec);
 static void print_parcels(Economy* ec);
 static void print_people(Economy* ec);
@@ -30,9 +29,10 @@ int main(int argc, char* argv[]) {
 	// ncurses stuff
 	initscr();
 	raw();
+	timeout(0); // nonblocking i/o
 	keypad(stdscr, TRUE);
 	noecho();
-	curs_set(0); // hide the cursor
+// 	curs_set(0); // hide the cursor
 	
 	Economy ec;
 	
@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
 		clear();
 		
 		mvprintw(0, 5, "Tick %d\n", n);
-
+		
 		switch(tab) {
 			case 0: print_companies(&ec); break;
 			case 1: print_mines(&ec); break;
@@ -97,7 +97,16 @@ int main(int argc, char* argv[]) {
 			case 5: print_people(&ec); break;
 		}
 		
-		ch = getch();
+		while(1) {
+			ch = getch();
+			if(ch == -1) {
+				usleep(10000);
+				continue;
+			}
+			
+			break;
+		}
+		
 		if(ch == CTRL_KEY('c')) {
 			break;
 		}
@@ -151,7 +160,7 @@ static void print_mines(Economy* ec) {
 	mvprintw(0, 20, "Mines");
 	
 	VECMP_EACH(&ec->Mine, mi, m) {
-		mvprintw(n + 1, 2, "%ld| metals: %d\n", mi, m->metals);
+		mvprintw(n + 1, 2, "%ld| metals: %d\n", m->id, m->metals);
 		
 		if(++n >= rows - 2) return;
 	}
@@ -188,7 +197,9 @@ static void print_companies(Economy* ec) {
 		Entity* e = Econ_GetEntity(ec, c->id);
 		Money* m = Econ_GetCompMoney(ec, e->money);
 		
-		mvprintw(n + 1, 2, " %d| cash: %d, MIT: %d\n", c->id, m->cash, c->metalsInTransit);
+		mvprintw(n + 1, 2, " %d| cash: %d, MIT: %d, par: %d, mine: %d, fact: %d, store: %d \n", 
+				 c->id, m->cash, c->metalsInTransit, VEC_LEN(&c->parcels), 
+				 VEC_LEN(&c->mines), VEC_LEN(&c->factories), VEC_LEN(&c->stores));
 		
 		if(++n >= rows - 2) return;
 	}

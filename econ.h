@@ -199,8 +199,10 @@ typedef struct Company {
 	VEC(entityid_t) parcels;
 	VEC(entityid_t) mines;
 	VEC(entityid_t) factories;
+	VEC(entityid_t) stores;
 	
 	int metalsInTransit;
+	int widgetsInTransit;
 	
 } Company;
 
@@ -243,6 +245,7 @@ typedef struct Store {
 	entityid_t id;
 	char* name;
 	
+	entityid_t owner;
 	entityid_t parcel;
 	int widgets;
 	

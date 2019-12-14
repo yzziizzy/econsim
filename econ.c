@@ -127,8 +127,9 @@ void Economy_init(Economy* ec) {
 			Parcel* p;
 			pcid = Econ_NewEntParcel(ec, &p);
 			
-			econid_t pid = Econ_NewEntity(ec, ET_Parcel, p, "Mapgen Parcel");
+			entityid_t pid = Econ_NewEntity(ec, ET_Parcel, p, "Mapgen Parcel");
 			
+			p->id = pid; 
 			p->loc.x = x;
 			p->loc.y = y;
 			p->price = 1000;
@@ -305,19 +306,19 @@ int Economy_BuyAsset(Economy* ec, EcAsset* ass, EcActor* buyer, money_t price) {
 
 
 
-entityid_t buyLand(Economy* ec, entityid_t buyer, Parcel* parOut) {
+entityid_t buyLand(Economy* ec, entityid_t buyer, Parcel** parOut) {
 	Entity* bent =  Econ_GetEntity(ec, buyer);
 	Money* m =  Econ_GetCompMoney(ec, bent->money);
 	
 	VECMP_EACH(&ec->Parcel, pi, p) {
 		if(p->owner) continue;
 		
-		if(m->cash > p->price) {
+		if(1 || m->cash > p->price) {
 			
 			m->cash -= p->price;
 			p->owner = buyer;
 			
-			if(parOut) parOut = p;
+			if(parOut) *parOut = p;
 			return p->id;
 		}
 	}
@@ -350,11 +351,109 @@ void doMine(Economy* ec, Mine* m) {
 
 
 
+entityid_t buildMine(Economy* ec, Company* c, Parcel* p) {
+	entityid_t mineID = Econ_CreateMine(ec, p->id, "Smaller Hole");
+	Mine* mine = Econ_GetEntity(ec, mineID)->userData;
+	
+	mine->owner = c->id;
+	p->structure = mineID;
+	
+	return mineID;
+}
+
+entityid_t buildFactory(Economy* ec, Company* c, Parcel* p) {
+	entityid_t fid = Econ_CreateFactory(ec, p->id, "Smog Mill");
+	Factory* f = Econ_GetEntity(ec, fid)->userData;
+	
+	f->owner = c->id;
+	p->structure = fid;
+	
+	return fid;
+}
+
+
+entityid_t buildStore(Economy* ec, Company* c, Parcel* p) {
+	entityid_t fid = Econ_CreateStore(ec, p->id, "SMart");
+	Store* f = Econ_GetEntity(ec, fid)->userData;
+	
+	f->owner = c->id;
+	p->structure = fid;
+	
+	return fid;
+}
+
+
+
 void doCompany(Economy* ec, Company* c) {
 	Entity* cent = Econ_GetEntity(ec, c->id);
 	Money* money = Econ_GetCompMoney(ec, cent->money);
 	
-	// look up money
+	
+	char hasMine = 1;
+	char hasFactory = 1;
+	char hasStore = 1;
+	Parcel* emptyParcel = NULL;
+	
+	if(VEC_LEN(&c->mines) == 0) hasMine = 0; 
+	if(VEC_LEN(&c->factories) == 0) hasFactory = 0; 
+	if(VEC_LEN(&c->stores) == 0) hasStore = 0; 
+	
+	VEC_EACH(&c->parcels, pi, pid) {
+		Entity* pent = Econ_GetEntity(ec, pid);
+		Parcel* p = pent->userData;
+		
+		if(p->structure == 0) {
+			emptyParcel = p;
+			break;
+		}
+	}
+	
+	
+	if((!hasMine || !hasFactory || !hasStore) && emptyParcel == NULL) {
+		Parcel* par;
+		entityid_t parid = buyLand(ec, c->id, &par);
+		
+		VEC_PUSH(&c->parcels, parid);
+		
+		return;
+	}
+	
+	if(!hasMine) {
+		entityid_t mid = buildMine(ec, c, emptyParcel);
+		VEC_PUSH(&c->mines, mid);
+		return;
+	}
+	
+	if(!hasFactory) {
+		entityid_t mid = buildFactory(ec, c, emptyParcel);
+		VEC_PUSH(&c->factories, mid);
+		return;
+	}
+	
+	if(!hasStore) {
+		entityid_t mid = buildStore(ec, c, emptyParcel);
+		VEC_PUSH(&c->stores, mid);
+		return;
+	}
+	
+	
+	// at this point we have a factory and a mine and a store
+	// move some metal to the factory
+	Entity* fent = Econ_GetEntity(ec, VEC_ITEM(&c->factories, 0));
+	Entity* sent = Econ_GetEntity(ec, VEC_ITEM(&c->stores, 0));
+	Factory* f = fent->userData;
+	Factory* s = sent->userData;
+	
+	if(c->metalsInTransit > 0) {
+		f->metals += c->metalsInTransit;
+		c->metalsInTransit = 0;
+	}
+	
+	if(c->widgetsInTransit > 0) {
+		s->widgets += c->widgetsInTransit;
+		c->widgetsInTransit = 0;
+	}
+	
 	
 	// check if have mine -> build mine
 		// check if have land -> buy land
@@ -382,8 +481,23 @@ void doCompany(Economy* ec, Company* c) {
 
 
 void doPerson(Economy* ec, Person* p) {}
-void doStore(Economy* ec, Store* p) {}
-void doFactory(Economy* ec, Factory* p) {}
+void doStore(Economy* ec, Store* s) {}
+
+void doFactory(Economy* ec, Factory* f) {
+	if(f->metals > 10) {
+		f->metals -= 10;
+		f->widgets++;
+	}
+	
+	if(f->widgets >= 10) {
+		Entity* cent = Econ_GetEntity(ec, f->owner);
+		Company* c = cent->userData;
+		
+		c->widgetsInTransit += 10;
+	}
+	
+}
+
 void doParcel(Economy* ec, Parcel* p) {}
 
 
