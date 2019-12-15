@@ -20,6 +20,7 @@ static void print_parcels(Economy* ec);
 static void print_people(Economy* ec);
 static void print_factories(Economy* ec);
 static void print_stores(Economy* ec);
+static void print_map(Economy* ec);
 
 
 
@@ -33,6 +34,10 @@ int main(int argc, char* argv[]) {
 	keypad(stdscr, TRUE);
 	noecho();
 // 	curs_set(0); // hide the cursor
+	
+	start_color();
+// 	init_pair(1, COLOR_WHITE, COLOR_BLACK | A_BOLD);
+    assume_default_colors( COLOR_WHITE, COLOR_BLACK | A_BOLD);
 	
 	Economy ec;
 	
@@ -59,7 +64,7 @@ int main(int argc, char* argv[]) {
 	int tab = 0;
 	
 	
-	entityid_t companyid = Econ_CreateCompany(&ec, "Initech");
+// 	entityid_t companyid = Econ_CreateCompany(&ec, "Initech");
 	Econ_CreatePerson(&ec, "Adam");
 	Econ_CreatePerson(&ec, "Bob");
 	Econ_CreatePerson(&ec, "Chuck");
@@ -78,9 +83,9 @@ int main(int argc, char* argv[]) {
 	Econ_CreatePerson(&ec, "Peter");
 	Econ_CreatePerson(&ec, "Quentin");
 	Econ_CreatePerson(&ec, "Randy");
-	entityid_t mineID = Econ_CreateMine(&ec, 4, "Big Hole");
-	Mine* mine = Econ_GetEntity(&ec, mineID)->userData;
-	mine->owner = companyid;
+// 	entityid_t mineID = Econ_CreateMine(&ec, 4, "Big Hole");
+// 	Mine* mine = Econ_GetEntity(&ec, mineID)->userData;
+// 	mine->owner = companyid;
 	
 	
 	for(int n = 1; n <= 1000; ) {
@@ -95,6 +100,7 @@ int main(int argc, char* argv[]) {
 			case 3: print_stores(&ec); break;
 			case 4: print_parcels(&ec); break;
 			case 5: print_people(&ec); break;
+			case 6: print_map(&ec); break;
 		}
 		
 		while(1) {
@@ -113,10 +119,10 @@ int main(int argc, char* argv[]) {
 		
 		mvprintw(18, 2, "char %d, %d", ch, tab);
 		if(ch == KEY_LEFT) {
-			tab = (tab - 1) % 6;
+			tab = (tab + 6) % 7;
 		}
 		else if(ch == KEY_RIGHT) {
-			tab = (tab + 1) % 6;
+			tab = (tab + 1) % 7;
 		}
 		
 		if(ch == ' ') {
@@ -179,7 +185,7 @@ static void print_people(Economy* ec) {
 		Entity* e = Econ_GetEntity(ec, p->id);
 		Money* m = Econ_GetCompMoney(ec, e->money);
 		
-		mvprintw(n + 1, 2, " %d| cash: %d\n", p->id, m->cash);
+		mvprintw(n + 1, 2, " %d| %s,\t cash: %d\n", p->id, p->name, m->cash);
 		
 		if(++n >= rows - 2) return;
 	}
@@ -219,7 +225,7 @@ static void print_stores(Economy* ec) {
 		Money* m = Econ_GetCompMoney(ec, e->money);
 		Store* s = e->userData;
 		
-		mvprintw(n + 1, 2, " %d| cash: %d, widgets: %d\n", p->id, m->cash, s->widgets);
+		mvprintw(n + 1, 2, " %d| widgets: %d, sales %d\n", p->id, s->widgets, s->sales);
 		
 		if(++n >= rows - 2) return;
 	}
@@ -247,8 +253,25 @@ static void print_factories(Economy* ec) {
 
 
 
+static void print_map(Economy* ec) {
+	
+	int rows, cols;
+	getmaxyx(stdscr, rows, cols);
 
-
+	
+	
+	for(int y = 0; y < 64; y++) {
+		for(int x = 0; x < 64; x++) {
+						
+			attron(COLOR_PAIR(2));
+			mvaddch(y, x*2,   ' ');
+			mvaddch(y, x*2+1, ' ');
+			attroff(COLOR_PAIR(2));
+		}
+	}
+	
+	
+}
 
 // 
 

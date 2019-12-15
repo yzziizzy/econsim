@@ -50,6 +50,12 @@ void Economy_tick(Economy* ec) {
 	tickCompany(ec);
 	tickPerson(ec);
 	
+	// external interaction
+	
+	if(frandNorm() > .9) {
+		entityid_t companyid = Econ_CreateCompany(ec, "Initech");
+	}
+	
 }
 
 
@@ -108,10 +114,10 @@ void Economy_init(Economy* ec) {
 	// fill in id 0
 	Econ_NewEntity(ec, ET_None, NULL, "Null Entity");
 	
-	#define X(type) VECMP_INIT(&ec->type, 8192);
+	#define X(type, a) VECMP_INIT(&ec->type, 8192);
 		ENTITY_TYPE_LIST
 	#undef X
-	#define X(type) VECMP_INIT(&ec->type, 8192);
+	#define X(type, a) VECMP_INIT(&ec->type, 8192);
 		COMP_TYPE_LIST
 	#undef X
 
@@ -336,6 +342,9 @@ void doMine(Economy* ec, Mine* m) {
 	
 	p->minerals -= 10;
 	m->metals += 3;
+	Econ_CommodityExNihilo(ec, CT_Ore, -10);
+	Econ_CommodityExNihilo(ec, CT_Metal, 3);
+
 	
 	if(m->metals > 10) {
 		m->metals -= 10;
@@ -479,14 +488,32 @@ void doCompany(Economy* ec, Company* c) {
 }
 
 
+void doPerson(Economy* ec, Person* p) {
+	// find job
+	// find house
+	// buy widgets
+}
 
-void doPerson(Economy* ec, Person* p) {}
-void doStore(Economy* ec, Store* s) {}
+
+void doHouse(Economy* ec, House* p) {
+	// random maintenance events
+}
+
+void doStore(Economy* ec, Store* s) {
+	if(s->widgets > 0) {
+		s->widgets--;
+		s->sales += 30;
+	}
+	
+}
+
 
 void doFactory(Economy* ec, Factory* f) {
 	if(f->metals > 10) {
 		f->metals -= 10;
 		f->widgets++;
+		Econ_CommodityExNihilo(ec, CT_Widget, 1);
+		Econ_CommodityExNihilo(ec, CT_Metal, -10);
 	}
 	
 	if(f->widgets >= 10) {
@@ -499,11 +526,12 @@ void doFactory(Economy* ec, Factory* f) {
 }
 
 void doParcel(Economy* ec, Parcel* p) {}
+void doFarm(Economy* ec, Farm* f) {}
 
 
 // tick loop functions
 
-#define X(type) void tick##type(Economy* ec) { \
+#define X(type, needsDoFn) void tick##type(Economy* ec) { \
 	VECMP_EACH(&ec->type, ci, c) { \
 		do##type(ec, c); \
 	} \
@@ -511,7 +539,7 @@ void doParcel(Economy* ec, Parcel* p) {}
 	ENTITY_TYPE_LIST
 #undef X
 
-#define X(type) compid_t Econ_NewComp##type(Economy* ec, type** out) { \
+#define X(type, a) compid_t Econ_NewComp##type(Economy* ec, type** out) { \
 	compid_t id; \
 	type* e; \
 	VECMP_INC(&(ec)->type); \
@@ -526,7 +554,7 @@ void doParcel(Economy* ec, Parcel* p) {}
 #undef X
 
 
-#define X(type) compid_t Econ_NewEnt##type(Economy* ec, type** out) { \
+#define X(type, a) compid_t Econ_NewEnt##type(Economy* ec, type** out) { \
 	compid_t id; \
 	type* e; \
 	VECMP_INC(&(ec)->type); \
@@ -541,7 +569,7 @@ void doParcel(Economy* ec, Parcel* p) {}
 #undef X
 
 
-#define X(type) type* Econ_GetEnt##type(Economy* ec, entityid_t id) { \
+#define X(type, a) type* Econ_GetEnt##type(Economy* ec, compid_t id) { \
 	type* e; \
 	e = &VECMP_ITEM(&(ec->type), id); \
 	return e; \
@@ -550,11 +578,96 @@ void doParcel(Economy* ec, Parcel* p) {}
 #undef X
 
 
-#define X(type) type* Econ_GetComp##type(Economy* ec, compid_t id) { \
+#define X(type, a) type* Econ_GetComp##type(Economy* ec, compid_t id) { \
 	type* e; \
 	e = &VECMP_ITEM(&(ec->type), id); \
 	return e; \
 }
 	COMP_TYPE_LIST
 #undef X
+
+
+
+
+
+static size_t CommoditySet_find_index(CommoditySet* cs, commodityid_t comm) {
+	ptrdiff_t R = cs->fill - 1;
+	ptrdiff_t L = 0;
+	ptrdiff_t i;
+	
+	while(R - L > 0) {
+		
+		// midpoint
+		i = L + ((R - L) / 2);
+		if(cs->buckets[i].comm < comm) {
+			L = i + 1;
+		}
+		else if(cs->buckets[i].comm > comm) {
+			R = i - 1;
+		}
+		else {
+			return i;
+		}
+	}
+	
+	return (cs->buckets[L].comm < comm) ? L + 1 : L;
+} 
+
+
+
+CommoditySet* CommoditySet_New(int size) {
+	CommoditySet* cs = calloc(1, sizeof(*cs) + sizeof(cs->buckets[0]) * size);
+	cs->length = size;
+	return cs;
+}
+
+
+// must never be given a null pointer
+// returns zero for success, 1 if the set could not accept more
+int CommoditySet_Add(CommoditySet* cs, commodityid_t comm, qty_t qty, int compact) {
+		// find the slot
+	size_t i = CommoditySet_find_index(cs, comm);
+	if(cs->buckets[i].comm == comm) {
+		cs->buckets[i].qty += qty; // TODO: check saturation
+		
+		// purge zero-value items, if desired
+		if(compact && cs->buckets[i].qty == 0) {
+			memmove(&cs->buckets[i], &cs->buckets[i + 1], (cs->fill - i - 1) * sizeof(cs->buckets[0]));
+			cs->fill--;
+		}
+		
+		return 0;
+	}
+	
+	// check for room
+	if(cs->fill >= cs->length) return 1; // overflow
+	
+	memmove(&cs->buckets[i + 1], &cs->buckets[i], (cs->fill - i) * sizeof(cs->buckets[0]));
+	cs->buckets[i].comm = comm;
+	cs->buckets[i].qty = qty;
+	cs->fill++;
+	
+	return 0;
+}
+
+
+// must never be given a null pointer
+qty_t CommoditySet_Get(CommoditySet* cs, commodityid_t comm) {
+	// find the slot
+	size_t i = CommoditySet_find_index(cs, comm);
+	if(cs->buckets[i].comm == comm) {
+		return cs->buckets[i].qty;
+	}
+	
+	return 0;
+}
+
+
+
+void Econ_CommodityExNihilo(Economy* ec, commodityid_t comm, qty_t qty) {
+	ec->commodityTotals[comm] += qty;
+}
+
+
+
 
