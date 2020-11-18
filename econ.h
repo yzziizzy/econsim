@@ -1,11 +1,14 @@
+#ifndef __econsim_econ_h__
+#define __econsim_econ_h__
+
 
 #include <stdint.h>
+#include <stdarg.h>
 
 
 #include "c3dlas/c3dlas.h"
-
-#include "mempool.h"
-#include "ds.h"
+#include "sti/sti.h"
+#include "c_json/json.h"
 
 
 typedef  int64_t money_t;
@@ -92,13 +95,13 @@ typedef struct EcActor {
 
 
 enum CommodityType {
-	CT_None = 0,
+	COMT_None = 0,
 	
-	#define X(x) CT_##x,
+	#define X(x) COMT_##x,
 		COMMODITY_LIST
 	#undef X
 	
-	CT_MAXVALUE,
+	COMT_MAXVALUE,
 };
 typedef struct CommodityBucket {
 	commodityid_t comm;
@@ -122,65 +125,182 @@ typedef struct CommoditySet {
 
 
 
-//    name    doFn
-#define ENTITY_TYPE_LIST \
-	X(Parcel,  1) \
-	X(Mine,    1) \
-	X(Factory, 1) \
-	X(Company, 1) \
-	X(Store,   1) \
-	X(House,   0) \
-	X(Farm,    1) \
-	X(Person,  1)
 
 #define COMP_TYPE_LIST \
-	X(Position, 0) \
-	X(Movement, 0) \
-	X(Money, 0) \
-	X(PathFollow, 0) \
+	X(int, 0) \
+	X(float, 0) \
+	X(id, 0) \
+	X(str, 0) \
+	X(itemrate, 0) \
 
 
-enum EntityType {
-	ET_None = 0,
+
+enum CompType {
+	CT_NULL = 0,
 	
-#define X(x, a) ET_##x,
-	ENTITY_TYPE_LIST
+#define X(x, a) CT_##x,
+	COMP_TYPE_LIST
 #undef X
 	
-	ET_MAXVALUE,
+	CT_MAXVALUE,
 };
 
 
-/*
+
+typedef struct ItemDef {
+	econid_t item;
+	float rate;
+} ItemRate;
+
+
+
+typedef struct CompDef {
+	int id;
+	char* name;
+	enum CompType type;
+	char isArray;
+} CompDef;
+
+
+typedef struct Comp {
+	int type;
+	int length;
+	union {
+		char* str;
+		double d;
+		int64_t n;
+		void* v;
+		econid_t id;
+		ItemRate itemRate;
+	};
+} Comp;
+
+typedef struct EntityDef {
+	int id;
+	char* name;
+		
+	VEC(struct {
+		int defID;
+		char hasLocalDefault;
+		Comp localDefault;
+	}) defaultComps;
+	
+} EntityDef;
 
 
 
 
-*/
 typedef struct Entity {
+	econid_t id;
 	unsigned int dead : 1;
 	unsigned int _pad : 23;
 	unsigned int uniqueCounter : 8;
+	unsigned int type;
+	tick_t born, died;
 	
-	tick_t created;
-	
-	enum EntityType type;
-	
-	
-	econid_t owner;
-	econid_t money;
-	econid_t position;
-	econid_t movement;
-	econid_t pathFollow;
-	
-	void* userData;
+	VEC(Comp) comps;
 	
 	// for debugging:
 	char* name;
 } Entity;
 
 
+typedef struct Economy {
+	tick_t tick;
 
+	// processed every tick
+	VECMP(EcCashflow) cashflow;
+	
+//	size_t entityCounts[ET_MAXVALUE];
+	
+	VECMP(EntityDef) entityDefs;
+	VECMP(CompDef) compDefs;
+	
+	VECMP(Entity) entities;
+	
+// 	// total amount of each commodity in the world
+//	int64_t commodityTotals[CT_MAXVALUE];
+	
+//	entityid_t parcelGrid[64][64];
+	
+} Economy;
+
+
+
+Entity* Economy_NewEntity(Economy* ec, int type, char* name);
+Entity* Economy_NewEntityName(Economy* ec, char* typeName, char* name);
+int Economy_EntityType(Economy* ec, char* typeName);
+EntityDef* Economy_NewEntityDef(Economy* ec);
+CompDef* Economy_NewCompDef(Economy* ec);
+int Economy_CompTypeFromName(Economy* ec, char* compName);
+CompDef* Econ_GetCompDefName(Economy* ec, char* compName);
+int CompInternalTypeFromName(char* t);
+int Economy_LoadConfig(Economy* ec, char* path);
+int Economy_LoadConfigJSON(Economy* ec, json_value_t* root);
+Comp* Entity_GetCompName(Entity* e, char* compName);
+Comp* Entity_GetComp(Entity* e, int compType);
+Comp* Entity_AddComp(Entity* e, int compType);
+Comp* Entity_AssertComp(Entity* e, int compType);
+Comp* Entity_SetCompName(Economy* ec, Entity* e, char* compName, ...);
+//Comp* Entity_SetComp(Economy* ec, Entity* e, int compType, ...) {
+CompDef* Econ_GetCompDef(Economy* ec, int compType);
+int Economy_CompTypeFromName(Economy* ec, char* compName);
+
+char* CompInternalType_GetName(int compInternalType);
+
+
+
+/*
+// tick loop functions
+#define X(type, a) void tick##type(Economy* ec);
+	ENTITY_TYPE_LIST
+#undef X
+
+#define X(type, a) entityid_t Econ_NewEnt##type(Economy* ec, type** out);
+	ENTITY_TYPE_LIST
+#undef X
+
+#define X(type, a) compid_t Econ_NewComp##type(Economy* ec, type** out);
+	COMP_TYPE_LIST
+#undef X
+
+
+#define X(type, a) type* Econ_GetComp##type(Economy* ec, compid_t id);
+	COMP_TYPE_LIST
+#undef X
+*/
+void Economy_tick(Economy* ec);
+/*
+econid_t Economy_AddActor(Economy* ec, char* name, money_t cash);
+econid_t Economy_AddCashflow(Economy* ec, money_t amount, econid_t from, econid_t to, uint32_t freq, char* desc);
+econid_t Economy_AddAsset(Economy* ec, EcAsset* ass);
+*/
+void Economy_init(Economy* ec);
+Entity* Econ_GetEntity(Economy* ec, econid_t eid);
+
+/*
+entityid_t Econ_CreateCompany(Economy* ec, char* name);
+entityid_t Econ_CreatePerson(Economy* ec, char* name);
+entityid_t Econ_CreateMine(Economy* ec, entityid_t parcel_id, char* name);
+entityid_t Econ_CreateFactory(Economy* ec, entityid_t parcel_id, char* name);
+entityid_t Econ_CreateStore(Economy* ec, entityid_t parcel_id, char* name);
+
+void Econ_CommodityExNihilo(Economy* ec, commodityid_t comm, qty_t qty);
+*/
+
+
+
+
+
+
+/*
+CommoditySet* CommoditySet_New(int size);
+int CommoditySet_Add(CommoditySet* cs, commodityid_t comm, qty_t qty, int compact);
+qty_t CommoditySet_Get(CommoditySet* cs, commodityid_t comm);
+*/
+
+
+/*
 
 typedef struct Money {
 	money_t cash;
@@ -292,12 +412,18 @@ typedef struct Factory {
 	int metals;
 	int widgets;
 	
+	entityid_t employees[16];
+	int employeeCnt; 
+	
 } Factory;
 
 
 typedef struct Person {
 	entityid_t id;
 	char* name;
+	
+	entityid_t employer;
+	entityid_t residence;
 	
 } Person;
 
@@ -311,92 +437,12 @@ typedef struct Store {
 	
 	money_t sales;
 	
+	entityid_t employees[16];
+	int employeeCnt; 
+	
 } Store;
 
+*/
 
 
-typedef struct Economy {
-	// processed every tick
-	VECMP(EcCashflow) cashflow;
-	
-// 	VECMP(EcAsset) assets;
-	
-	// TODO: debt
-	
-// 	EcMarket* markets;
-// 	char** comNames;
-	
-// 	VECMP(EcActor) actors;
-// 	VECMP(char*) cfDescriptions;
-	
-	size_t entityCounts[ET_MAXVALUE];
-	
-	
-	VECMP(Entity) Entity;
-	
-	
-	#define X(type, a) VECMP(type) type;
-		ENTITY_TYPE_LIST
-	#undef X
-	
-	#define X(type, a) VECMP(type) type;
-		COMP_TYPE_LIST
-	#undef X
-	
-// 	// total amount of each commodity in the world
-	int64_t commodityTotals[CT_MAXVALUE];
-	
-	// temporary junk:
-	
-	entityid_t parcelGrid[64][64];
-	
-} Economy;
-
-
-// tick loop functions
-#define X(type, a) void tick##type(Economy* ec);
-	ENTITY_TYPE_LIST
-#undef X
-
-#define X(type, a) entityid_t Econ_NewEnt##type(Economy* ec, type** out);
-	ENTITY_TYPE_LIST
-#undef X
-
-#define X(type, a) compid_t Econ_NewComp##type(Economy* ec, type** out);
-	COMP_TYPE_LIST
-#undef X
-
-
-#define X(type, a) type* Econ_GetComp##type(Economy* ec, compid_t id);
-	COMP_TYPE_LIST
-#undef X
-
-void Economy_tick(Economy* ec);
-
-econid_t Economy_AddActor(Economy* ec, char* name, money_t cash);
-econid_t Economy_AddCashflow(Economy* ec, money_t amount, econid_t from, econid_t to, uint32_t freq, char* desc);
-econid_t Economy_AddAsset(Economy* ec, EcAsset* ass);
-
-void Economy_init(Economy* ec);
-Entity* Econ_GetEntity(Economy* ec, econid_t eid);
-
-entityid_t Econ_CreateCompany(Economy* ec, char* name);
-entityid_t Econ_CreatePerson(Economy* ec, char* name);
-entityid_t Econ_CreateMine(Economy* ec, entityid_t parcel_id, char* name);
-entityid_t Econ_CreateFactory(Economy* ec, entityid_t parcel_id, char* name);
-entityid_t Econ_CreateStore(Economy* ec, entityid_t parcel_id, char* name);
-
-void Econ_CommodityExNihilo(Economy* ec, commodityid_t comm, qty_t qty);
-
-
-
-
-
-
-
-
-CommoditySet* CommoditySet_New(int size);
-int CommoditySet_Add(CommoditySet* cs, commodityid_t comm, qty_t qty, int compact);
-qty_t CommoditySet_Get(CommoditySet* cs, commodityid_t comm);
-
-
+#endif // __econsim_econ_h__

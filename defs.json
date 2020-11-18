@@ -1,0 +1,36 @@
+{
+component_defs: [
+	{name: "name", type: "str", default: 0},
+	{name: "cash", type: "int", default: 0},
+	{name: "debt", type: "int", default: 0},
+	{name: "owner", type: "id", default: 0},
+	{name: "owns", type: "^id", default: 0},
+	{name: "location", type: "id", default: 0},
+	{name: "produces", type: "^itemrate", default: [0, 0]},
+	
+	
+	
+],
+entity_defs: [
+	{name: "Person", defaultComps: ["location", ]},
+	{name: "Parcel", defaultComps: ["location", ]},
+	{name: "Mine", defaultComps: ["location", "produces"]},
+	{name: "Factory", defaultComps: ["location", "produces"]},
+
+],
+entities: [
+	{type: "Person", comps: [["name", "Alvin"], ["cash", 372], ]},
+	{type: "Person", comps: [["name", "Betty"], ["cash", 23], ]},
+	{type: "Person", comps: [["name", "Chuck"], ["cash", 102405], ]},
+	{type: "Person", comps: [["name", "Daryl"], ["cash", 5], ]},
+	{type: "Person", comps: [["name", "Ellen"], ["cash", 0], ]},
+	{type: "Person", comps: [["name", "Frank"], ["cash", 4550], ]},
+	{type: "Person", comps: [["name", "Ginny"], ["cash", 1215], ]},
+	
+	{type: "Mine", comps: [["name", "Big-O"], ["cash", 10000], ]},
+	{type: "Mine", comps: [["name", "Big-D"], ["cash", 10000], ]},
+	
+	
+	
+]
+}

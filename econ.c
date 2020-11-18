@@ -16,6 +16,274 @@
 #define CLAMP(v, min, max) (v < min ? v : (v > max ? max : v))
 
 
+int Economy_LoadConfig(Economy* ec, char* path) {
+	json_file_t* jsf = json_load_path(path);
+	if(!jsf) {
+		fprintf(stderr, "File not found: '%s'\n", path);
+		return 1;
+	}
+	
+	int ret = Economy_LoadConfigJSON(ec, jsf->root);
+	
+	json_file_free(jsf);
+	
+	return ret;
+}
+
+
+int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
+	
+	if(root->type != JSON_TYPE_OBJ) {
+		fprintf(stderr, "Invalid config format\n");
+		return 1;
+	}
+	
+	
+	// component definitions
+	json_value_t* j_cdefs = json_obj_get_val(root, "component_defs");
+	if(j_cdefs) {
+		if(j_cdefs->type != JSON_TYPE_ARRAY) {
+			fprintf(stderr, "Invalid component_defs format\n");
+			return 2;
+		}
+	
+		json_array_node_t* link = j_cdefs->v.arr->head;
+		while(link) {
+			// parse a component definition
+			CompDef* cd = Economy_NewCompDef(ec);
+			
+			cd->name = strdup(json_obj_get_string(link->value, "name"));			
+			
+			int off = 0;
+			char* typestr = json_obj_get_string(link->value, "type");
+			if(typestr[0] == 0) {
+				fprintf(stderr, "Invalid component type\n");
+				return 3;
+			}
+			
+			if(typestr[0] == '^') {
+				cd->isArray = 1;
+				off = 1;
+			}
+			
+			cd->type = CompInternalTypeFromName(typestr + off);
+			if(cd->type == 0) {
+				fprintf(stderr, "Invalid component internal type: %s\n", typestr);
+				return 4;
+			} 
+						
+			link = link->next;
+		}
+		
+		
+	}
+	
+	// entity definitions
+	json_value_t* j_edefs = json_obj_get_val(root, "entity_defs");
+	if(j_edefs) {
+		if(j_edefs->type != JSON_TYPE_ARRAY) {
+			fprintf(stderr, "Invalid entity_defs format\n");
+			return 2;
+		}
+	
+		json_array_node_t* link = j_edefs->v.arr->head;
+		while(link) {
+			// parse a component definition
+			EntityDef* ed = Economy_NewEntityDef(ec);
+			
+			ed->name = strdup(json_obj_get_string(link->value, "name"));
+						
+			link = link->next;
+		}
+		
+		
+	}
+	
+	// load the entities themselves
+	json_value_t* j_ents = json_obj_get_val(root, "entities");
+	if(j_ents) {
+		if(j_ents->type != JSON_TYPE_ARRAY) {
+			fprintf(stderr, "Invalid entity format\n");
+			return 2;
+		}
+	
+		json_array_node_t* link = j_ents->v.arr->head;
+		while(link) {
+			json_value_t* j_ent = link->value;
+			
+			// read the entity type and create it
+			char* typeName = json_obj_get_string(j_ent, "type");
+			Entity* e = Economy_NewEntityName(ec, typeName, "");
+			
+			// read the component values
+			json_value_t* j_comps = json_obj_get_val(j_ent, "comps");
+			json_array_node_t* clink = j_comps->v.arr->head;
+			while(clink) {
+				json_value_t* j_comp = clink->value;
+				
+				// get the component name and type, then create it
+				char* compName;
+				json_as_string(j_comp->v.arr->head->value, &compName);
+				CompDef* cd = Econ_GetCompDefName(ec, compName);
+				Comp* c = Entity_AssertComp(e, cd->id);
+				
+				// read and set the component value
+				json_value_t* j_cval = j_comp->v.arr->head->next->value;
+							
+				switch(cd->type) {
+					default:
+						fprintf(stderr, "unknown component type: %d\n", cd->type);
+						exit(1);
+					
+					case CT_float: json_as_double(j_cval, &c->d); break;
+					
+					case CT_int: json_as_int(j_cval, &c->n); break;
+					
+					case CT_str: c->str = strdup(j_cval->v.str); break;
+					
+					case CT_id: 
+						c->id = 0;
+						break;
+					case CT_itemrate:
+						c->itemRate.item = 0;
+						json_as_float(j_cval->v.arr->head->next->value, &c->itemRate.rate);
+						break;	
+				}
+				
+				
+				clink = clink->next;
+			}
+			
+			link = link->next;
+		}
+		
+	}
+	
+	return 0;
+}
+
+
+static char* g_CompTypeLookup[] = {
+	[CT_NULL] = "CT_NULL",
+	
+#define X(x, a) [CT_##x] = #x,
+	COMP_TYPE_LIST
+#undef X
+	
+	[CT_MAXVALUE] = "CT_MAXVALUE",
+};
+
+
+int CompInternalTypeFromName(char* t) {
+	for(int i = 1; i < CT_MAXVALUE; i++) {
+		if(0 == strcmp(t, g_CompTypeLookup[i])) return i;
+	}
+
+	return 0;
+} 
+
+char* CompInternalType_GetName(int compInternalType) {
+	return g_CompTypeLookup[compInternalType];
+}
+
+CompDef* Econ_GetCompDef(Economy* ec, int compType) {
+	return &VECMP_ITEM(&ec->compDefs, compType);
+}
+
+CompDef* Econ_GetCompDefName(Economy* ec, char* compName) {
+	return Econ_GetCompDef(ec, Economy_CompTypeFromName(ec, compName));
+}
+
+int Economy_CompTypeFromName(Economy* ec, char* compName) {
+	VECMP_EACH(&ec->compDefs, i, cd) {
+		if(0 == strcmp(cd->name, compName)) return cd->id;
+	}
+	
+	return -1;
+}
+
+
+Comp* Entity_SetCompName(Economy* ec, Entity* e, char* compName, ...) {
+	int ctype = CompInternalTypeFromName(compName);
+	Comp* c = Entity_AssertComp(e, ctype);
+	
+	// TODO: support arrays
+	CompDef* cd = Econ_GetCompDef(ec, ctype);
+	va_list va;
+	va_start(va, compName);
+	switch(cd->type) {
+		default:
+			fprintf(stderr, "unknown component type: %d\n", cd->type);
+			exit(1);
+			
+		case CT_int: c->n = va_arg(va, int64_t); break;
+		case CT_float: c->d = va_arg(va, double); break;
+		case CT_str: c->str = strdup(va_arg(va, char*)); break;
+		case CT_id: c->id = va_arg(va, econid_t); break;
+		case CT_itemrate: c->itemRate = va_arg(va, ItemRate); break;
+	}
+	va_end(va);
+	
+	return c;
+} 
+
+
+int Economy_EntityType(Economy* ec, char* typeName) {
+	VECMP_EACH(&ec->entityDefs, i, ed) {
+		if(0 == strcmp(typeName, ed->name)) return ed->id;
+	}
+	
+	return -1;
+}
+
+
+Entity* Economy_NewEntityName(Economy* ec, char* typeName, char* name) {
+	int type = Economy_EntityType(ec, typeName);
+	return Economy_NewEntity(ec, type, name);
+}
+
+Entity* Economy_NewEntity(Economy* ec, int type, char* name) {
+	Entity* e;
+	econid_t id;
+	
+	if(type == -1) return NULL;
+	
+	VECMP_INC(&ec->entities); \
+	id = VECMP_LAST_INS_INDEX(&ec->entities); \
+	e = &VECMP_ITEM(&ec->entities, id); \
+	
+	e->id = id;
+	e->name = strdup(name);
+	e->type = type;
+	
+	return e;
+}
+
+
+CompDef* Economy_NewCompDef(Economy* ec) {
+	CompDef* cd;
+	econid_t id;
+	
+	VECMP_INC(&ec->compDefs); \
+	id = VECMP_LAST_INS_INDEX(&ec->compDefs); \
+	cd = &VECMP_ITEM(&ec->compDefs, id); \
+	cd->id = id;
+	
+	return cd;
+}
+
+EntityDef* Economy_NewEntityDef(Economy* ec) {
+	EntityDef* ed;
+	econid_t id;
+	
+	VECMP_INC(&ec->entityDefs); \
+	id = VECMP_LAST_INS_INDEX(&ec->entityDefs); \
+	ed = &VECMP_ITEM(&ec->entityDefs, id); \
+	ed->id = id;
+	
+	return ed;
+}
+
 
 void Economy_tick(Economy* ec) {
 	
@@ -43,19 +311,19 @@ void Economy_tick(Economy* ec) {
 	*/
 	
 	// transport should tick first or last
-	
+/*	
 	tickMine(ec);
 	tickFactory(ec);
 	tickStore(ec);
 	tickCompany(ec);
 	tickPerson(ec);
-	
+	*/
 	// external interaction
-	
+	/*
 	if(frandNorm() > .9) {
 		entityid_t companyid = Econ_CreateCompany(ec, "Initech");
 	}
-	
+	*/
 }
 
 
@@ -63,13 +331,6 @@ void Economy_tick(Economy* ec) {
 type* Econ_Get##type(Economy*ec, compid_t id) { \
 	return &VECMP_ITEM(&(ec->type), id); \
 } 
-
-DEFINE_GET_COMPONENT(Entity)
-DEFINE_GET_COMPONENT(Movement)
-DEFINE_GET_COMPONENT(Position)
-DEFINE_GET_COMPONENT(Money)
-DEFINE_GET_COMPONENT(PathFollow)
-
 
 
 #define NEW_COMPONENT(ec, type, id, e) \
@@ -82,19 +343,67 @@ DEFINE_GET_COMPONENT(PathFollow)
 
 
 	
-
-entityid_t Econ_NewEntity(Economy* ec, enum EntityType type, void* userData, char* name) {
-	NEW_COMPONENT(ec, Entity, id, e);
 	
+	
+Entity* Econ_NewEntity(Economy* ec, int type, char* name) {
+	econid_t id;
+	Entity* e;
+	
+	VECMP_INC(&ec->entities);
+	id = VECMP_LAST_INS_INDEX(&ec->entities);
+	e = &VECMP_ITEM(&ec->entities, id);
+	memset(e, 0, sizeof(*e));
+	
+	e->id = id;
 	e->type = type;
-	e->userData = userData;
 	e->name = name;
+	e->born = ec->tick;
 	
-	ec->entityCounts[type]++;
-	
-	return id;
+	return e;
 }
 
+
+Comp* Entity_GetComp(Entity* e, int compType) {
+	VEC_EACHP(&e->comps, i, cp) {
+		if(cp->type == compType) return cp;
+	}
+	
+	return NULL;
+}
+
+Comp* Entity_GetCompName(Entity* e, char* compName) {
+	return Entity_GetComp(e, CompInternalTypeFromName(compName));	
+}
+
+
+Comp* Entity_SetCompInt(Entity* e, int compType, int64_t val) {
+	
+	return NULL;
+}
+
+// return value is only valid temporarily
+Comp* Entity_AddComp(Entity* e, int compType) {
+	Comp* c;
+	
+	VEC_INC(&e->comps);
+	c = &VEC_TAIL(&e->comps);
+	
+	c->type = compType;
+	
+	return c;
+}
+
+// return value is only valid temporarily
+Comp* Entity_AssertComp(Entity* e, int compType) {
+	Comp* c;
+	
+	c = Entity_GetComp(e, compType);
+	if(!c) {
+		c = Entity_AddComp(e, compType);
+	}
+	
+	return c;
+}
 
 
 
@@ -109,24 +418,30 @@ void Economy_init(Economy* ec) {
 // 	VECMP_INIT(&ec->actors, MAX_ACTORS);
 // 	VECMP_INIT(&ec->cfDescriptions, MAX_CASHFLOW);
 	
-	VECMP_INIT(&ec->Entity, 16384);
+	VECMP_INIT(&ec->entities, 16384);
+	VECMP_INIT(&ec->compDefs, 16384);
+	VECMP_INIT(&ec->entityDefs, 16384);
+	
+	Economy_LoadConfig(ec, "defs.json");
 	
 	// fill in id 0
-	Econ_NewEntity(ec, ET_None, NULL, "Null Entity");
+	Econ_NewEntity(ec, 0, "Null Entity");
 	
+	
+	/*
 	#define X(type, a) VECMP_INIT(&ec->type, 8192);
 		ENTITY_TYPE_LIST
 	#undef X
 	#define X(type, a) VECMP_INIT(&ec->type, 8192);
 		COMP_TYPE_LIST
 	#undef X
-
+*/
 // 	ec->markets = calloc(1, sizeof(*ec->markets) * MAX_COMMODITIES);
 // 	for(uint32_t i = 0; i < MAX_COMMODITIES; i++) ec->markets[i].commodity = i;
 	
 // 	ec->comNames = calloc(1, sizeof(*ec->comNames) * MAX_COMMODITIES);
 	
-	
+	/*
 	for(int y = 0; y < 64; y++) {
 		for(int x = 0; x < 64; x++) {
 			entityid_t pcid; // wrong
@@ -144,11 +459,13 @@ void Economy_init(Economy* ec) {
 			ec->parcelGrid[x][y] = pid;
 		}
 	}
-	
+	*/
 	
 	
 }
 
+
+/*
 void Entity_InitMoney(Economy* ec, entityid_t eid) {
 	Entity* e = Econ_GetEntity(ec, eid);
 	
@@ -229,7 +546,7 @@ entityid_t Econ_CreateStore(Economy* ec, entityid_t parcel_id, char* name) {
 	return cid;
 }
 
-
+*/
 
 
 /*
@@ -249,6 +566,7 @@ econid_t Economy_AddActor(Economy* ec, char* name, money_t cash) {
 	return id;
 }
 */
+
 
 
 econid_t Economy_AddCashflow(
@@ -311,7 +629,7 @@ int Economy_BuyAsset(Economy* ec, EcAsset* ass, EcActor* buyer, money_t price) {
 */
 
 
-
+/*
 entityid_t buyLand(Economy* ec, entityid_t buyer, Parcel** parOut) {
 	Entity* bent =  Econ_GetEntity(ec, buyer);
 	Money* m =  Econ_GetCompMoney(ec, bent->money);
@@ -332,10 +650,10 @@ entityid_t buyLand(Economy* ec, entityid_t buyer, Parcel** parOut) {
 	return 0;
 }
 
-
+*/
 
 // tick functions
-
+/*
 void doMine(Economy* ec, Mine* m) {
 	Entity* pent = Econ_GetEntity(ec, m->parcel);
 	Parcel* p = pent->userData;
@@ -669,5 +987,5 @@ void Econ_CommodityExNihilo(Economy* ec, commodityid_t comm, qty_t qty) {
 }
 
 
-
+*/
 
