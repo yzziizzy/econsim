@@ -125,20 +125,21 @@ typedef struct CommoditySet {
 
 
 
-
+// jsonNam,    isPtr, typeName,    propName
 #define COMP_TYPE_LIST \
-	X(int, 0) \
-	X(float, 0) \
-	X(id, 0) \
-	X(str, 0) \
-	X(itemrate, 0) \
+	X(int,         0, int64_t,     n) \
+	X(float,       0, double,      d) \
+	X(id,          0, econid_t,    id) \
+	X(str,         0, char*,       str) \
+	X(itemRate,   1, ItemRate,    itemRate) \
+	X(convertRate, 1, ConvertRate, convertRate) \
 
 
 
 enum CompType {
 	CT_NULL = 0,
 	
-#define X(x, a) CT_##x,
+#define X(x, a, b, c) CT_##x,
 	COMP_TYPE_LIST
 #undef X
 	
@@ -147,10 +148,17 @@ enum CompType {
 
 
 
-typedef struct ItemDef {
+typedef struct ItemRate {
 	econid_t item;
 	float rate;
 } ItemRate;
+
+typedef struct ConvertRate {
+	econid_t fromItem;
+	econid_t toItem;
+	
+	float rate;
+} ConvertRate;
 
 
 
@@ -159,21 +167,38 @@ typedef struct CompDef {
 	char* name;
 	enum CompType type;
 	char isArray;
+	char isPtr;
 } CompDef;
 
+#define IF_PTR_1 *
+#define IF_PTR_0
+#define IF_PTR(a) IF_PTR_ ## a
 
 typedef struct Comp {
 	int type;
-	int length;
+	unsigned short length;
+	unsigned short alloc;
 	union {
-		char* str;
-		double d;
-		int64_t n;
-		void* v;
-		econid_t id;
-		ItemRate itemRate;
+		void* vp;
+		
+		#define X(x, a, b, c) b IF_PTR(a) c;
+			COMP_TYPE_LIST
+		#undef X
 	};
 } Comp;
+
+
+
+typedef struct InvItem {
+	econid_t item;
+	long count;
+} InvItem;
+
+
+typedef struct Inventory {
+	VECMP(InvItem) items;
+} Inventory;
+
 
 typedef struct EntityDef {
 	int id;
@@ -188,8 +213,6 @@ typedef struct EntityDef {
 } EntityDef;
 
 
-
-
 typedef struct Entity {
 	econid_t id;
 	unsigned int dead : 1;
@@ -199,7 +222,8 @@ typedef struct Entity {
 	tick_t born, died;
 	
 	VEC(Comp) comps;
-	
+	Inventory inv;
+	 
 	// for debugging:
 	char* name;
 } Entity;
@@ -227,26 +251,37 @@ typedef struct Economy {
 
 
 
-Entity* Economy_NewEntity(Economy* ec, int type, char* name);
+Entity* Econ_NewEntity(Economy* ec, int type, char* name);
 Entity* Economy_NewEntityName(Economy* ec, char* typeName, char* name);
 int Economy_EntityType(Economy* ec, char* typeName);
 EntityDef* Economy_NewEntityDef(Economy* ec);
+
 CompDef* Economy_NewCompDef(Economy* ec);
-int Economy_CompTypeFromName(Economy* ec, char* compName);
+CompDef* Econ_GetCompDef(Economy* ec, int compType);
 CompDef* Econ_GetCompDefName(Economy* ec, char* compName);
+
+int Economy_CompTypeFromName(Economy* ec, char* compName);
 int CompInternalTypeFromName(char* t);
 int Economy_LoadConfig(Economy* ec, char* path);
 int Economy_LoadConfigJSON(Economy* ec, json_value_t* root);
-Comp* Entity_GetCompName(Entity* e, char* compName);
+Comp* Entity_GetCompName(Economy* ec, Entity* e, char* compName);
 Comp* Entity_GetComp(Entity* e, int compType);
 Comp* Entity_AddComp(Entity* e, int compType);
 Comp* Entity_AssertComp(Entity* e, int compType);
 Comp* Entity_SetCompName(Economy* ec, Entity* e, char* compName, ...);
-//Comp* Entity_SetComp(Economy* ec, Entity* e, int compType, ...) {
-CompDef* Econ_GetCompDef(Economy* ec, int compType);
-int Economy_CompTypeFromName(Economy* ec, char* compName);
+Comp* Entity_SetComp(Economy* ec, Entity* e, int compType, ...);
+Comp* Entity_SetComp_va(Economy* ec, Entity* e, int ctype, va_list va);
+int Econ_CompTypeFromName(Economy* ec, char* compName);
 
 char* CompInternalType_GetName(int compInternalType);
+size_t InternalCompTypeSize(int internalType);
+
+econid_t Econ_FindItem(Economy* ec, char* name);
+
+void Inv_Init(Inventory* inv);
+InvItem* Inv_GetItemP(Inventory* inv, econid_t id);
+InvItem* Inv_AddItem(Inventory* inv, econid_t id, long count);
+InvItem* Inv_AssertItemP(Inventory* inv, econid_t id);
 
 
 

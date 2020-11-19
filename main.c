@@ -65,20 +65,38 @@ int main(int argc, char* argv[]) {
 	int scrollh = 0;
 	int scrollv = 0;
 	
-	char* cols[] = {
-		"name",
-		"cash",
-		"owner",
-		"owns",
+	
+	typedef struct View {
+		char* name;
+		char* dispName;
+		char** cols;
+		
+	} View;
+	
+	View views[] = {
+		{.name = "Forest", .dispName = "Forests", .cols = (char*[]){"name", "!Tree", NULL} },
+		{.name = "Person", .dispName = "People", .cols = (char*[]){"name", "cash", NULL} },
+		{.name = "Mine", .dispName = "Mines", .cols = (char*[]){"name", NULL} },
+		
+		{.name = NULL},
 	};
+	
 	
 	for(int n = 1; n <= 1000; ) {
 		clear();
 		
-		mvprintw(0, 5, "Tick %d\n", n);
+		
+		mvprintw(0, 1, "Tick %d\n", n);
+		mvprintw(0, 20, "%s:\n", views[tab].dispName);
+		
+		mvprintw(1, 2, "char %d, %d, %d", scrollh, scrollv, tab);
 		
 		
-		print_entities_type(&ec, tab, scrollv, 20, cols, scrollh);
+		int entType = Economy_EntityType(&ec, views[tab].name);
+		
+		print_entities_type(&ec, entType, scrollv, 20, views[tab].cols, scrollh);
+		
+		
 		
 		
 		while(1) {
@@ -91,16 +109,29 @@ int main(int argc, char* argv[]) {
 			break;
 		}
 		
-		if(ch == CTRL_KEY('c')) {
+		if(ch == CTRL_KEY('c') || ch == 'q') {
 			break;
 		}
 		
-		mvprintw(18, 2, "char %d, %d", ch, tab);
-		if(ch == KEY_LEFT) {
-			tab = ((tab + 6) % 7) + 1;
+		if(ch == '\t') {
+			scrollh = 0;
+			scrollv = 0;
+			
+			tab++;
+			
+			if(views[tab].name == NULL) tab = 0;
+		}
+		else if(ch == KEY_LEFT) {
+			scrollh = MAX(0, scrollh - 1);
 		}
 		else if(ch == KEY_RIGHT) {
-			tab = (tab + 1) % 7;
+			scrollh = MAX(0, scrollh + 1);
+		}
+		else if(ch == KEY_UP) {
+			scrollv = MAX(0, scrollv - 1);
+		}
+		else if(ch == KEY_DOWN) {
+			scrollv = MAX(0, scrollv + 1);
 		}
 		
 		if(ch == ' ') {
@@ -133,7 +164,7 @@ static void print_comp_val(Economy* ec, Comp* c) {
 		case CT_float: printw("%f", c->d); break;
 		case CT_str: printw("%s", c->str); break;
 		case CT_id: printw("%ld", c->id); break;
-		case CT_itemrate: printw("%ld:%f", c->itemRate.item, c->itemRate.rate); break;
+		case CT_itemRate: printw("%ld:%f", c->itemRate->item, c->itemRate->rate); break;
 	}
 	
 }
@@ -146,11 +177,24 @@ static void print_entity(Economy* ec, Entity* e, int width, int offset, char** c
 	getyx(stdscr, y, x);
 		
 	
-	for(int i = offset, n = 0; cols[i] && n < 3; i++, n++) {
-		move(y, x + (width * n));
-		Comp* c = Entity_GetCompName(e, cols[i]);
+	for(int i = 0, n = 0; cols[i] && n < 3; i++) {
+		if(i < offset) continue;
 		
-		print_comp_val(ec, c);
+		move(y, x + (width * n));
+		
+		if(cols[i][0] == '!') {
+			int itemid = Econ_FindItem(ec, cols[i] + 1);
+			
+			InvItem* item = Inv_GetItemP(&e->inv, itemid);
+			if(item)
+				printw("%ld", item->count);
+		}
+		else {
+			Comp* c = Entity_GetCompName(ec, e, cols[i]);
+			print_comp_val(ec, c);
+		}
+		
+		n++;
 	}
 }
 
@@ -169,7 +213,7 @@ static void print_entities_type(
 		if(e->type != type) continue;
 		if(i < voffset) continue;
 		
-		move(n++ + 2, 2);		
+		move(n++ + 3, 2);		
 		
 		print_entity(ec, e, width, hoffset, cols); 
 		
