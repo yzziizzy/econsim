@@ -131,8 +131,8 @@ typedef struct CommoditySet {
 	X(float,       0, double,      d) \
 	X(id,          0, econid_t,    id) \
 	X(str,         0, char*,       str) \
-	X(itemRate,   1, ItemRate,    itemRate) \
-	X(convertRate, 1, ConvertRate, convertRate) \
+	X(itemRate,    1, ItemRate,    itemRate) \
+	X(conversion,  1, econid_t,    conversion) \
 
 
 
@@ -229,6 +229,18 @@ typedef struct Entity {
 } Entity;
 
 
+typedef struct Conversion {
+	econid_t id;
+	char* name;
+	
+	int inputCnt, outputCnt;
+	struct {
+		econid_t id;
+		long count;
+	} *inputs, *outputs;
+	
+} Conversion;
+
 typedef struct Economy {
 	tick_t tick;
 
@@ -241,6 +253,9 @@ typedef struct Economy {
 	VECMP(CompDef) compDefs;
 	
 	VECMP(Entity) entities;
+	VECMP(Conversion) conversions;
+	
+	VEC(econid_t) convertors;
 	
 // 	// total amount of each commodity in the world
 //	int64_t commodityTotals[CT_MAXVALUE];
@@ -283,6 +298,7 @@ InvItem* Inv_GetItemP(Inventory* inv, econid_t id);
 InvItem* Inv_AddItem(Inventory* inv, econid_t id, long count);
 InvItem* Inv_AssertItemP(Inventory* inv, econid_t id);
 
+Conversion* Econ_NewConversion(Economy* ec);
 
 
 /*

@@ -7,7 +7,7 @@ component_defs: [
 	{name: "owns", type: "^id", default: 0},
 	{name: "location", type: "id", default: 0},
 	{name: "produces", type: "^itemRate", default: [0, 0]},
-	{name: "converts", type: "^convertRate", default: [0, 0, 0, 0]},
+	{name: "converts", type: "^conversion", default: 0},
 	
 	{name: "weight", type: "float", default: 0},
 	{name: "volume", type: "float", default: 0},
@@ -19,10 +19,15 @@ entity_defs: [
 	{name: "Parcel", defaultComps: ["location", ]},
 	{name: "Mine", defaultComps: ["location", "produces"]},
 	{name: "Forest", defaultComps: ["location", "produces"]},
+	{name: "LoggingCamp", defaultComps: ["location", "produces"]},
 	{name: "Factory", defaultComps: ["location", "produces"]},
 	
 	{name: "Item", defaultComps: ["weight", "volume"]},
 
+],
+conversions: [
+	{id: '>lumberjack', name: 'Lumberjack', input: [['@tree', 1]], output: [['@log', 2]]},
+	{id: '>sawmill', name: 'Sawmill', input: [['@log', 1]], output: [['@boards', 10], ['@sawdust', 1]]},
 ],
 entities: [
 	{id: '@ironore', type: "Item", comps: [["name", "Iron Ore"], ["weight", 12], ['volume', 1] ], },
@@ -41,12 +46,20 @@ entities: [
 	{type: "Mine", comps: [["name", "Big-O"], ['produces', ['@ironore', 20.4]], ['owner', '@alvin'], ]},
 	{type: "Mine", comps: [["name", "Big-D"], ['produces', ['@ironore', 12.5]], ]},
 	
+	{type: "LoggingCamp", comps: [["name", "Big-D"], ['converts', '>lumberjack']]},
+	
 	{type: "Forest", 
 		comps: [["name", "Black Forest"], ['acres', 100]],
-		inv: [['@tree', 12000], ],
+		inv: [['@tree', 9500], ],
 	},
-	
-	
+	{type: "Forest", 
+		comps: [["name", "White Forest"], ['acres', 60]],
+		inv: [['@tree', 6000], ],
+	},
+	{type: "Forest", 
+		comps: [["name", "Yellow Forest"], ['acres', 35]],
+		inv: [['@tree', 4250], ],
+	},
 	
 ]
 }
