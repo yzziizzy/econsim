@@ -11,6 +11,19 @@
 #include "c_json/json.h"
 
 
+extern FILE* _log;
+
+static inline void LOG(char* fmt, ...) {
+	va_list va;
+	va_start(va, fmt);
+	vfprintf(_log, fmt, va);
+	fprintf(_log, "\n");
+	fflush(_log);
+	va_end(va);
+}
+
+
+
 typedef  int64_t money_t;
 typedef uint32_t entityid_t;
 typedef uint32_t compid_t;
@@ -132,7 +145,9 @@ typedef struct CommoditySet {
 	X(id,          0, econid_t,    id) \
 	X(str,         0, char*,       str) \
 	X(itemRate,    1, ItemRate,    itemRate) \
-	X(conversion,  1, econid_t,    conversion) \
+	X(conversion,  1, ConvertRate, convertRate) \
+	X(roadspan,    1, RoadSpan,    roadSpan) \
+	X(roadconnect, 1, RoadConnect, roadConnect) \
 
 
 
@@ -148,16 +163,50 @@ enum CompType {
 
 
 
+
+typedef struct InvItem {
+	econid_t item;
+	long count;
+} InvItem;
+
+
+typedef struct Inventory {
+	VECMP(InvItem) items;
+} Inventory;
+
+
+
+
+typedef struct RoadSpan {
+	struct { float x, y; } a, b;
+} RoadSpan;
+
+typedef struct RoadConnect {
+	econid_t to;
+	struct {float x, y; } where;
+} RoadConnect;
+
 typedef struct ItemRate {
 	econid_t item;
 	float rate;
+	float acc;
 } ItemRate;
 
-typedef struct ConvertRate {
-	econid_t fromItem;
-	econid_t toItem;
+
+typedef struct Conversion {
+	econid_t id;
+	char* name;
 	
+	int inputCnt, outputCnt;
+	InvItem* inputs;
+	InvItem* outputs;
+} Conversion;
+
+
+typedef struct ConvertRate {
+	Conversion* c;	
 	float rate;
+	float acc;
 } ConvertRate;
 
 
@@ -188,18 +237,6 @@ typedef struct Comp {
 } Comp;
 
 
-
-typedef struct InvItem {
-	econid_t item;
-	long count;
-} InvItem;
-
-
-typedef struct Inventory {
-	VECMP(InvItem) items;
-} Inventory;
-
-
 typedef struct EntityDef {
 	int id;
 	char* name;
@@ -222,24 +259,13 @@ typedef struct Entity {
 	tick_t born, died;
 	
 	VEC(Comp) comps;
-	Inventory inv;
+	Inventory* inv;
 	 
 	// for debugging:
 	char* name;
 } Entity;
 
 
-typedef struct Conversion {
-	econid_t id;
-	char* name;
-	
-	int inputCnt, outputCnt;
-	struct {
-		econid_t id;
-		long count;
-	} *inputs, *outputs;
-	
-} Conversion;
 
 typedef struct Economy {
 	tick_t tick;
@@ -256,6 +282,7 @@ typedef struct Economy {
 	VECMP(Conversion) conversions;
 	
 	VEC(econid_t) convertors;
+	VEC(econid_t) roads;
 	
 // 	// total amount of each commodity in the world
 //	int64_t commodityTotals[CT_MAXVALUE];
@@ -275,7 +302,7 @@ CompDef* Economy_NewCompDef(Economy* ec);
 CompDef* Econ_GetCompDef(Economy* ec, int compType);
 CompDef* Econ_GetCompDefName(Economy* ec, char* compName);
 
-int Economy_CompTypeFromName(Economy* ec, char* compName);
+int Econ_CompTypeFromName(Economy* ec, char* compName);
 int CompInternalTypeFromName(char* t);
 int Economy_LoadConfig(Economy* ec, char* path);
 int Economy_LoadConfigJSON(Economy* ec, json_value_t* root);
@@ -294,9 +321,11 @@ size_t InternalCompTypeSize(int internalType);
 econid_t Econ_FindItem(Economy* ec, char* name);
 
 void Inv_Init(Inventory* inv);
+Inventory* Inv_New();
 InvItem* Inv_GetItemP(Inventory* inv, econid_t id);
 InvItem* Inv_AddItem(Inventory* inv, econid_t id, long count);
 InvItem* Inv_AssertItemP(Inventory* inv, econid_t id);
+InvItem* Entity_InvAddItem(Entity* e, econid_t id, long count);
 
 Conversion* Econ_NewConversion(Economy* ec);
 

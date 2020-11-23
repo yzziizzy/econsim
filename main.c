@@ -12,6 +12,10 @@
 
 #include "econ.h"
 
+FILE* _log;
+
+
+
 static void print_comp_val(Economy* ec, Comp* c);
 static void print_entity(Economy* ec, Entity* e, int width, int offset, char** cols);
 static void print_entities_type(
@@ -22,8 +26,11 @@ static void print_entities_type(
 
 
 
+
 int main(int argc, char* argv[]) {
 	int ch;
+	
+	_log = fopen("/tmp/econsim.log", "w");
 
 	Economy ec;
 	
@@ -76,7 +83,7 @@ int main(int argc, char* argv[]) {
 	View views[] = {
 		{.name = "Forest", .dispName = "Forests", .cols = (char*[]){"name", "!Tree", NULL} },
 		{.name = "Person", .dispName = "People", .cols = (char*[]){"name", "cash", NULL} },
-		{.name = "Mine", .dispName = "Mines", .cols = (char*[]){"name", NULL} },
+		{.name = "Mine", .dispName = "Mines", .cols = (char*[]){"name", "!Iron Ore", NULL} },
 		
 		{.name = NULL},
 	};
@@ -144,6 +151,8 @@ int main(int argc, char* argv[]) {
 	
 	endwin();
 	
+	fclose(_log);
+	
 	return 0;
 }
 
@@ -185,7 +194,7 @@ static void print_entity(Economy* ec, Entity* e, int width, int offset, char** c
 		if(cols[i][0] == '!') {
 			int itemid = Econ_FindItem(ec, cols[i] + 1);
 			
-			InvItem* item = Inv_GetItemP(&e->inv, itemid);
+			InvItem* item = Inv_GetItemP(e->inv, itemid);
 			if(item)
 				printw("%ld", item->count);
 		}

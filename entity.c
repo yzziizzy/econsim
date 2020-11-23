@@ -48,7 +48,7 @@ Entity* Econ_NewEntity(Economy* ec, int type, char* name) {
 	e->name = name;
 	e->born = ec->tick;
 	
-	Inv_Init(&e->inv);
+//	Inv_Init(&e->inv);
 	
 	return e;
 }
@@ -72,12 +72,30 @@ econid_t Econ_FindItem(Economy* ec, char* name) {
 
 
 
+InvItem* Entity_InvAddItem(Entity* e, econid_t id, long count) {
+	if(!e->inv) {
+		e->inv = Inv_New();
+	}
+	return Inv_AddItem(e->inv, id, count);
+}
+
+
+Inventory* Inv_New() {
+	Inventory* inv = calloc(1, sizeof(*inv));
+	
+	Inv_Init(inv);
+	
+	return inv;
+}
+
 void Inv_Init(Inventory* inv) {
 	VECMP_INIT(&inv->items, 1024); // max types of items in inv 
 }
 
 
 InvItem* Inv_GetItemP(Inventory* inv, econid_t id) {
+	if(!inv) return NULL;
+	
 	VECMP_EACH(&inv->items, i, item) {
 		if(item->item == id) return item;
 	}

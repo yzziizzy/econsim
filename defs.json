@@ -1,4 +1,6 @@
 {
+
+
 component_defs: [
 	{name: "name", type: "str", default: 0},
 	{name: "cash", type: "int", default: 0},
@@ -9,9 +11,17 @@ component_defs: [
 	{name: "produces", type: "^itemRate", default: [0, 0]},
 	{name: "converts", type: "^conversion", default: 0},
 	
+	{name: "length", type: "float", default: 0},
+	{name: "width", type: "float", default: 0},
+	{name: "height", type: "float", default: 0},
 	{name: "weight", type: "float", default: 0},
 	{name: "volume", type: "float", default: 0},
+	{name: "area", type: "float", default: 0},
 	{name: "acres", type: "float", default: 0},
+	
+	{name: "lanes", type: "int", default: 0},
+	{name: "roadspan", type: "roadspan", default: 0},
+	{name: "roadconnect", type: "roadconnect", default: 0},
 	
 ],
 entity_defs: [
@@ -33,7 +43,9 @@ entities: [
 	{id: '@ironore', type: "Item", comps: [["name", "Iron Ore"], ["weight", 12], ['volume', 1] ], },
 	{id: '@pigiron', type: "Item", comps: [["name", "Pig Iron"], ["weight", 12], ['volume', 1] ], },
 	{id: '@steel',   type: "Item", comps: [["name", "Steel"],    ["weight", 12], ['volume', 1] ], },
-	{id: '@tree',    type: "Item", comps: [["name", "Tree"],    ["weight", 1], ['volume', 10] ], },
+	{id: '@tree',    type: "Item", comps: [["name", "Tree"],     ["weight", 2],  ['volume', 10] ], },
+	{id: '@log',     type: "Item", comps: [["name", "Log"],      ["weight", 1],  ['volume', 5] ], },
+	{id: '@sawdust', type: "Item", comps: [["name", "Sawdust"],  ["weight", 1],  ['volume', 1] ], },
 	
 	{type: "Person", comps: [["name", "Alvin"], ["cash", 372], ], id: '@alvin', },
 	{type: "Person", comps: [["name", "Betty"], ["cash", 23], ]},
@@ -43,23 +55,32 @@ entities: [
 	{type: "Person", comps: [["name", "Frank"], ["cash", 4550], ]},
 	{type: "Person", comps: [["name", "Ginny"], ["cash", 1215], ]},
 	
-	{type: "Mine", comps: [["name", "Big-O"], ['produces', ['@ironore', 20.4]], ['owner', '@alvin'], ]},
-	{type: "Mine", comps: [["name", "Big-D"], ['produces', ['@ironore', 12.5]], ]},
+	{type: "Mine", comps: [["name", "Big-O"], ['produces', ['@ironore', 0.19]], ['owner', '@alvin'], ]},
+	{type: "Mine", comps: [["name", "Big-D"], ['produces', ['@ironore', 2.5]], ]},
 	
 	{type: "LoggingCamp", comps: [["name", "Big-D"], ['converts', '>lumberjack']]},
 	
-	{type: "Forest", 
+	{id: '@bforest', type: "Forest", 
 		comps: [["name", "Black Forest"], ['acres', 100]],
 		inv: [['@tree', 9500], ],
 	},
-	{type: "Forest", 
+	{id: '@wforest', type: "Forest", 
 		comps: [["name", "White Forest"], ['acres', 60]],
 		inv: [['@tree', 6000], ],
 	},
-	{type: "Forest", 
+	{id: '@yforest', type: "Forest", 
 		comps: [["name", "Yellow Forest"], ['acres', 35]],
 		inv: [['@tree', 4250], ],
 	},
 	
-]
+	{id: '^hwye', type: 'Road', comps:[['name', 'East Highway'], ['roadspan', [0,0,  0,100]], ['lanes', 2], ['roadconnect', ['@hwyw', 0,0]] ]}
+	{id: '^hwyw', type: 'Road', comps:[['name', 'West Highway'], ['roadspan', [0,0,  100,0]], ['lanes', 2], ]}
+],
+/*
+distances: [
+	['@bforest', '@wforest', 10],
+	['@bforest', '@yforest', 10],
+	['@wforest', '@yforest', 15],
+],
+*/
 }

@@ -59,15 +59,15 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			return 2;
 		}
 	
-		json_array_node_t* link = j_cdefs->v.arr->head;
+		json_link_t* link = j_cdefs->arr.head;
 		while(link) {
 			// parse a component definition
 			CompDef* cd = Economy_NewCompDef(ec);
 			
-			cd->name = strdup(json_obj_get_string(link->value, "name"));			
+			cd->name = strdup(json_obj_get_str(link->v, "name"));			
 			
 			int off = 0;
-			char* typestr = json_obj_get_string(link->value, "type");
+			char* typestr = json_obj_get_str(link->v, "type");
 			if(typestr[0] == 0) {
 				fprintf(stderr, "Invalid component type\n");
 				return 3;
@@ -100,12 +100,12 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			return 2;
 		}
 	
-		json_array_node_t* link = j_edefs->v.arr->head;
+		json_link_t* link = j_edefs->arr.head;
 		while(link) {
 			// parse a component definition
 			EntityDef* ed = Economy_NewEntityDef(ec);
 			
-			ed->name = strdup(json_obj_get_string(link->value, "name"));
+			ed->name = strdup(json_obj_get_str(link->v, "name"));
 						
 			link = link->next;
 		}
@@ -136,29 +136,28 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			return 2;
 		}
 	
-		json_array_node_t* link = j_ents->v.arr->head;
+		json_link_t* link = j_ents->arr.head;
 		while(link) {
-			json_value_t* j_ent = link->value;
+			json_value_t* j_ent = link->v;
 			
 			// read the entity type and create it
-			char* typeName = json_obj_get_string(j_ent, "type");
+			char* typeName = json_obj_get_str(j_ent, "type");
 			Entity* e = Economy_NewEntityName(ec, typeName, "");
 			
 			// put the id reference string in the lookup for later
-			char* idString = json_obj_get_string(j_ent, "id");
+			char* idString = json_obj_get_str(j_ent, "id");
 			if(idString) {
 				HT_set(&nameLookup, idString, e->id);
 			}
 			
 			// read the component values
 			json_value_t* j_comps = json_obj_get_val(j_ent, "comps");
-			json_array_node_t* clink = j_comps->v.arr->head;
+			json_link_t* clink = j_comps->arr.head;
 			while(clink) {
-				json_value_t* j_comp = clink->value;
+				json_value_t* j_comp = clink->v;
 				
 				// get the component name and type, then create it
-				char* compName;
-				json_as_string(j_comp->v.arr->head->value, &compName);
+				char* compName = j_comp->arr.head->v->s;
 				CompDef* cd = Econ_GetCompDefName(ec, compName);
 				Comp* c = Entity_AssertComp(e, cd->id);
 				
@@ -167,28 +166,39 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 				}
 								
 				// read and set the component value
-				json_value_t* j_cval = j_comp->v.arr->head->next->value;
+				json_value_t* j_cval = j_comp->arr.head->next->v;
 							
 				switch(cd->type) {
 					default:
 						fprintf(stderr, "unknown component type: %d\n", cd->type);
 						exit(1);
 					
-					case CT_float: json_as_double(j_cval, &c->d); break;
+					case CT_float: c->d = json_as_double(j_cval); break;
 					
-					case CT_int: json_as_int(j_cval, &c->n); break;
+					case CT_int: c->n = json_as_int(j_cval); break;
 					
-					case CT_str: c->str = strdup(j_cval->v.str); break;
+					case CT_str: c->str = strdup(j_cval->s); break;
 					
 					case CT_id: 
-						VEC_PUSH(&fixes, ((struct fixes){j_cval->v.str, &c->id}));
+						VEC_PUSH(&fixes, ((struct fixes){j_cval->s, &c->id}));
 						break;
 					case CT_itemRate:
-						VEC_PUSH(&fixes, ((struct fixes){j_cval->v.str, &c->itemRate->item}));
-						json_as_float(j_cval->v.arr->head->next->value, &c->itemRate->rate);
+						VEC_PUSH(&fixes, ((struct fixes){j_cval->s, &c->itemRate->item}));
+						c->itemRate->rate = json_as_float(j_cval->arr.head->next->v);
 						break;
 					
 					case CT_conversion:
+						
+						break;
+						
+					case CT_roadspan:
+						c->roadSpan->a.x = json_as_float(j_cval->arr.head->v);
+						c->roadSpan->a.y = json_as_float(j_cval->arr.head->next->v);
+						c->roadSpan->b.x = json_as_float(j_cval->arr.head->next->next->v);
+						c->roadSpan->b.y = json_as_float(j_cval->arr.head->next->next->next->v);
+						break;
+					
+					case CT_roadconnect:
 						
 						break;	
 				}
@@ -201,17 +211,18 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			// read the inventory
 			json_value_t* j_inv = json_obj_get_val(j_ent, "inv");
 			if(j_inv) {
-				json_array_node_t* ilink = j_inv->v.arr->head;
+				json_link_t* ilink = j_inv->arr.head;
 				while(ilink) {
-					json_value_t* j_item = ilink->value;
+					json_value_t* j_item = ilink->v;
 					
 					// get the component name and type, then create it
 					char* itemName;
 					long count;
-					json_as_string(j_item->v.arr->head->value, &itemName);
-					json_as_int(j_item->v.arr->head->next->value, &count);
+					itemName = j_item->arr.head->v->s;
+					count = json_as_int(j_item->arr.head->next->v);
 					
-					VEC_PUSH(&invDefer, ((struct invDefer){&e->inv, itemName, count}));
+					if(!e->inv) e->inv = Inv_New();
+					VEC_PUSH(&invDefer, ((struct invDefer){e->inv, itemName, count}));
 					
 					ilink = ilink->next;
 				}
@@ -231,37 +242,37 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			return 2;
 		}
 	
-		json_array_node_t* link = j_convs->v.arr->head;
+		json_link_t* link = j_convs->arr.head;
 		while(link) {
-			json_value_t* j_conv = link->value;
+			json_value_t* j_conv = link->v;
 		
 			// get the component name and type, then create it
 			Conversion* c = Econ_NewConversion(ec);
-			c->name = json_obj_get_string(j_conv, "name");
+			c->name = json_obj_get_strdup(j_conv, "name");
 			
-			char* idString = json_obj_get_string(j_conv, "id");
+			char* idString = json_obj_get_str(j_conv, "id");
 			if(idString) {
 				HT_set(&nameLookup, idString, c->id);
 			}
 			
 			// add the inputs
 			json_value_t* j_ins = json_obj_get_val(j_conv, "input");
-			if(!j_ins || j_ins->type != JSON_TYPE_ARRAY || j_ins->v.arr->length == 0) {
+			if(!j_ins || j_ins->type != JSON_TYPE_ARRAY || j_ins->len == 0) {
 				fprintf(stderr, "Conversion with invalid input\n");
 				return 5;
 			}
 			
-			c->inputCnt = j_ins->v.arr->length;
+			c->inputCnt = j_ins->len;
 			c->inputs = calloc(1, sizeof(*c->inputs) * c->inputCnt);
 						
 			int n = 0;
-			json_array_node_t* ilink = j_ins->v.arr->head;
+			json_link_t* ilink = j_ins->arr.head;
 			while(ilink) {
-				json_value_t* v = ilink->value;
+				json_value_t* v = ilink->v;
 				
-				char* idString = v->v.arr->head->value->v.str;
-				VEC_PUSH(&fixes, ((struct fixes){idString, &c->inputs[n].id}));
-				json_as_int(v->v.arr->tail->value, &c->inputs[n].count);
+				char* idString = v->arr.head->v->s;
+				VEC_PUSH(&fixes, ((struct fixes){idString, &c->inputs[n].item}));
+				c->inputs[n].count = json_as_int(v->arr.tail->v);
 				
 				n++;
 				ilink = ilink->next;
@@ -270,22 +281,22 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			
 			// add the outputs
 			json_value_t* j_outs = json_obj_get_val(j_conv, "output");
-			if(!j_outs || j_outs->type != JSON_TYPE_ARRAY || j_outs->v.arr->length == 0) {
+			if(!j_outs || j_outs->type != JSON_TYPE_ARRAY || j_outs->len == 0) {
 				fprintf(stderr, "Conversion with invalid output\n");
 				return 5;
 			}			
 			
-			c->outputCnt = j_outs->v.arr->length;
+			c->outputCnt = j_outs->len;
 			c->outputs = calloc(1, sizeof(*c->outputs) * c->outputCnt);
 						
 			n = 0;
-			ilink = j_outs->v.arr->head;
+			ilink = j_outs->arr.head;
 			while(ilink) {
-				json_value_t* v = ilink->value;
+				json_value_t* v = ilink->v;
 				
-				char* idString = v->v.arr->head->value->v.str;
-				VEC_PUSH(&fixes, ((struct fixes){idString, &c->outputs[n].id}));
-				json_as_int(v->v.arr->tail->value, &c->outputs[n].count);
+				char* idString = v->arr.head->v->s;
+				VEC_PUSH(&fixes, ((struct fixes){idString, &c->outputs[n].item}));
+				c->outputs[n].count = json_as_int(v->arr.tail->v);
 				
 				n++;
 				ilink = ilink->next;
@@ -329,44 +340,43 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 
 
 void Economy_tick(Economy* ec) {
+	ec->tick++;
 	
-	/*
-	// process cashflows
-	VECMP_EACH(&ec->cashflow, ind, cf) {
-		// TODO: handle overflow
-		if(cf->from == ECON_MAGIC) {
-			VECMP_ITEM(&ec->cash, cf->to) += cf->amount;
-		}
-		else if(cf->to == ECON_MAGIC) {
-			VECMP_ITEM(&ec->cash, cf->from) -= cf->amount;
-		}
-		else {
-			money_t tmp = VECMP_ITEM(&ec->cash, cf->from);
-			tmp = CLAMP(cf->amount, tmp, ECON_CASHMAX);
-			VECMP_ITEM(&ec->cash, cf->to) += tmp;
-			VECMP_ITEM(&ec->cash, cf->from) -= tmp;
-			
-			// TODO: trigger bankruptcy 
+	int prodtypeid = Econ_CompTypeFromName(ec, "produces");
+	int convtypeid = Econ_CompTypeFromName(ec, "converts");
+	
+	
+	VECMP_EACH(&ec->entities, i, e) {
+		Comp* c;
+		
+		// production
+		c = Entity_GetComp(e, prodtypeid);
+		if(c) {
+			if(++c->itemRate->acc >= c->itemRate->rate) {
+				int n = c->itemRate->acc / c->itemRate->rate;
+				Entity_InvAddItem(e, c->itemRate->item, n);
+				
+				c->itemRate->acc -= c->itemRate->rate * n;
+			}
 		}
 		
-	} 
-	
-	*/
-	
-	// transport should tick first or last
-/*	
-	tickMine(ec);
-	tickFactory(ec);
-	tickStore(ec);
-	tickCompany(ec);
-	tickPerson(ec);
-	*/
-	// external interaction
-	/*
-	if(frandNorm() > .9) {
-		entityid_t companyid = Econ_CreateCompany(ec, "Initech");
+		// conversion
+		c = Entity_GetComp(e, convtypeid);
+		if(c) {
+			ConvertRate* cr = c->convertRate;
+			if(++c->itemRate->acc >= c->itemRate->rate) {
+				int n = c->itemRate->acc / c->itemRate->rate;
+				Entity_InvAddItem(e, c->itemRate->item, n);
+				
+				c->itemRate->acc -= c->itemRate->rate * n;
+			}
+		}
+		
+		
 	}
-	*/
+	
+	
+	
 }
 
 
