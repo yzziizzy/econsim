@@ -103,10 +103,12 @@ Inventory* Inv_New() {
 
 void Inv_Init(Inventory* inv) {
 	VECMP_INIT(&inv->items, 1024); // max types of items in inv 
+	VEC_INIT(&inv->escrow);
 }
 
 void Inv_Destroy(Inventory* inv) {
 	VECMP_FREE(&inv->items); 
+	VEC_FREE(&inv->escrow);
 }
 
 
@@ -119,6 +121,15 @@ InvItem* Inv_GetItemP(Inventory* inv, econid_t id) {
 	return NULL;
 }
 
+EscrowItem* Inv_GetEscrowItemP(Inventory* inv, econid_t owner, econid_t id) {
+	if(!inv) return NULL;
+	
+	VEC_EACHP(&inv->escrow, i, item) {
+		if(item->item == id && item->owner == owner) return item;
+	}
+	return NULL;
+}
+
 InvItem* Inv_AssertItemP(Inventory* inv, econid_t id) {
 	VECMP_EACH(&inv->items, i, item) {
 		if(item->item == id) return item;
@@ -127,6 +138,16 @@ InvItem* Inv_AssertItemP(Inventory* inv, econid_t id) {
 	VECMP_INSERT(&inv->items, ((InvItem){id, 0}));
 	
 	return VECMP_LAST_INSERT(&inv->items);
+}
+
+EscrowItem* Inv_AssertEscrowItemP(Inventory* inv, econid_t owner, econid_t id) {
+	VEC_EACHP(&inv->escrow, i, item) {
+		if(item->item == id && item->owner == owner) return item;
+	}
+	
+	VEC_PUSH(&inv->escrow, ((EscrowItem){owner, id, 0}));
+	
+	return &VEC_TAIL(&inv->escrow);
 }
 
 
@@ -145,36 +166,83 @@ InvItem* Inv_AddItem(Inventory* inv, econid_t id, long count) {
 }
 
 
-void Entity_FuseInventories(Entity* e1, Entity* e2) {
-	Inventory* inv1 = e1->inv;
-	Inventory* inv2 = e2->inv;
+EscrowItem* Inv_AddEscrowItem(Inventory* inv, econid_t owner, econid_t id, long count) {
+	EscrowItem* item = Inv_GetEscrowItemP(inv, owner, id);
+	if(!item) {
+		if(count < 0) count = 0;
+		VEC_PUSH(&inv->escrow, ((EscrowItem){owner, id, count}));
+	}
+	else {
+		item->count += count;
+		if(item->count < 0) item->count = 0;
+	}
+	
+	return &VEC_TAIL(&inv->escrow);
+}
+
+// returns number of items moved into escrow
+long Inv_MoveToEscrow(Inventory* inv, econid_t newOwner, econid_t item, long count) {
+	EscrowItem* es = Inv_AssertEscrowItemP(inv, newOwner, item);
+	InvItem* it = Inv_GetItemP(inv, item);
+	
+	if(!it || it->count <= 0) return 0;
+	
+	long toMove = MIN(count, it->count);
+	it->count -= toMove;
+	es->count += toMove;
+	
+	return toMove;
+}
+
+// returns the number of items changed
+long Inv_EscrowChangeOwner(Inventory* inv, econid_t oldOwner, econid_t newOwner, econid_t item, long count) {
+	EscrowItem* o = Inv_AssertEscrowItemP(inv, oldOwner, item);
+	if(o->count == 0) return 0;
+	
+	EscrowItem* n = Inv_AssertEscrowItemP(inv, newOwner, item);
+	
+	long toChange = MIN(o->count, count);
+	o->count -= toChange;
+	n->count += toChange;
+	
+	return toChange;
+}
+
+
+
+void Entity_FuseInventories(Entity* e_core, Entity* e_extra) {
+	Inventory* invc = e_core->inv;
+	Inventory* inve = e_extra->inv;
 	
 	// simple cases where one or both inv's are NULL
-	if(!inv1 && !inv2) {
-		inv1 = Inv_New();
-		e1->inv = inv1;
-		e1->inv = inv2;
+	if(!invc && !inve) {
+		invc = Inv_New();
+		e_core->inv = invc;
+		e_extra->inv = invc;
 		return;
 	}
 	
-	if(!inv1) {
-		e1->inv = inv2;
+	if(!invc) {
+		e_core->inv = inve;
 		return;
 	}
-	if(!inv2) {
-		e2->inv = inv1;
+	if(!inve) {
+		e_extra->inv = invc;
 		return;
 	}
 	
 	// combine contents
-	VECMP_EACH(&inv2->items, i, it) {
-		Inv_AddItem(inv1, it->item, it->count);
+	VECMP_EACH(&inve->items, i, it) {
+		Inv_AddItem(invc, it->item, it->count);
+	}
+	VEC_EACHP(&inve->escrow, i, eit) {
+		Inv_AddEscrowItem(invc,  eit->owner, eit->item, eit->count);
 	}
 	
-	Inv_Destroy(inv2);
-	free(inv2);
+	Inv_Destroy(inve);
+	free(inve);
 	
-	e1->inv = inv1;
+	e_extra->inv = invc;
 }
 
 

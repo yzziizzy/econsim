@@ -8,6 +8,7 @@ component_defs: [
 	{name: "location", type: "id", default: 0},
 	{name: "produces", type: "^itemRate", default: [0, 0]},
 	{name: "converts", type: "^conversion", default: 0},
+	{name: "sells", type: "^itemPrice", default: 0},
 	
 	{name: "length", type: "float", default: 0},
 	{name: "width", type: "float", default: 0},
@@ -26,6 +27,7 @@ entity_defs: [
 	{name: "Road", defaultComps: [ ]},
 	{name: "Person", defaultComps: ["location", ]},
 	{name: "Parcel", defaultComps: ["location", ]},
+	{name: "Transport", defaultComps: [], },
 	{name: "Mine", defaultComps: ["location", "produces"]},
 	{name: "Forest", defaultComps: ["location", "produces"]},
 	{name: "LoggingCamp", fusedInv: 'location', defaultComps: ["location", "produces"]},
@@ -36,8 +38,13 @@ entity_defs: [
 ],
 conversions: [
 	{id: '>lumberjack', name: 'Lumberjack', input: [['@tree', 1]], output: [['@log', 2]]},
-	{id: '>sawmill', name: 'Sawmill', input: [['@log', 1]], output: [['@board', 10], ['@sawdust', 1]]},
+	{id: '>sawmill', name: 'Sawmill', input: [['@log', 10]], output: [['@board', 100], ['@sawdust', 8]]},
 ],
+market: {
+	sinks: [
+		{name: "Diekea", item: "@board", maxBuyPrice: 10, maxBuysPerTick: 53 },
+	],
+},
 entities: [
 	{id: '@ironore', type: "Item", comps: [["name", "Iron Ore"], ["weight", 12], ['volume', 1] ], },
 	{id: '@pigiron', type: "Item", comps: [["name", "Pig Iron"], ["weight", 12], ['volume', 1] ], },
@@ -59,6 +66,7 @@ entities: [
 	{type: "Mine", comps: [["name", "Big-D"], ['produces', ['@ironore', 2.5]], ]},
 	
 	{type: "LoggingCamp", comps: [["name", "Big-D"], ['converts', [3, '>lumberjack']], ['location', '@bforest'], ]},
+	{type: "LoggingCamp", comps: [["name", "Big-Z"], ['converts', [1, '>sawmill']], ['location', '@bforest'], ['sells', ['@board', 5]]]},
 	
 	{id: '@bforest', type: "Forest", 
 		comps: [["name", "Black Forest"], ['acres', 100]],

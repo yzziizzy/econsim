@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
 	} View;
 	
 	View views[] = {
-		{.name = "Forest", .dispName = "Forests", .cols = (char*[]){"name", "!Tree", "!Log", NULL} },
+		{.name = "Forest", .dispName = "Forests", .cols = (char*[]){"name", "!Tree", "!Log", "!Board", "!Sawdust", NULL} },
 		{.name = "Person", .dispName = "People", .cols = (char*[]){"name", "cash", NULL} },
 		{.name = "Mine", .dispName = "Mines", .cols = (char*[]){"name", "!Iron Ore", NULL} },
 		
@@ -90,8 +90,9 @@ int main(int argc, char* argv[]) {
 	
 	
 	for(int n = 1; n <= 1000; ) {
-		clear();
 		
+		
+		erase();
 		
 		mvprintw(0, 1, "Tick %d\n", n);
 		mvprintw(0, 20, "%s:\n", views[tab].dispName);
@@ -115,6 +116,7 @@ int main(int argc, char* argv[]) {
 			
 			break;
 		}
+		
 		
 		if(ch == CTRL_KEY('c') || ch == 'q') {
 			break;
@@ -186,7 +188,7 @@ static void print_entity(Economy* ec, Entity* e, int width, int offset, char** c
 	getyx(stdscr, y, x);
 		
 	
-	for(int i = 0, n = 0; cols[i] && n < 3; i++) {
+	for(int i = 0, n = 0; cols[i] && n < 6; i++) {
 		if(i < offset) continue;
 		
 		move(y, x + (width * n));
@@ -196,8 +198,11 @@ static void print_entity(Economy* ec, Entity* e, int width, int offset, char** c
 			int itemid = Econ_FindItem(ec, cols[i] + 1);
 //			LOG(" - %d", itemid);
 			InvItem* item = Inv_GetItemP(e->inv, itemid);
+			EscrowItem* eitem = Inv_GetEscrowItemP(e->inv, e->id, itemid);
 //			LOG(" -- %p", item);
-			if(item)
+			if(eitem) 
+				printw("%ld/%ld", item->count, eitem->count);
+			else if(item)
 				printw("%ld", item->count);
 		}
 		else {

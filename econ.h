@@ -42,8 +42,6 @@ typedef uint32_t tick_t; // 4 billion tick limit to world sim time
 
 
 
-
-
 typedef struct EcCashflow {
 	econid_t from, to;
 	money_t amount;
@@ -145,6 +143,7 @@ typedef struct CommoditySet {
 	X(id,          0, econid_t,    id) \
 	X(str,         0, char*,       str) \
 	X(itemRate,    1, ItemRate,    itemRate) \
+	X(itemPrice,   1, ItemPrice,    itemPrice) \
 	X(conversion,  1, ConvertRate, convertRate) \
 	X(roadspan,    1, RoadSpan,    roadSpan) \
 	X(roadconnect, 1, RoadConnect, roadConnect) \
@@ -169,9 +168,16 @@ typedef struct InvItem {
 	long count;
 } InvItem;
 
+typedef struct EscrowItem {
+	econid_t owner;
+	econid_t item;
+	long count;
+} EscrowItem;
+
 
 typedef struct Inventory {
 	VECMP(InvItem) items;
+	VEC(EscrowItem) escrow;
 } Inventory;
 
 
@@ -191,6 +197,11 @@ typedef struct ItemRate {
 	float rate;
 	float acc;
 } ItemRate;
+
+typedef struct ItemPrice {
+	econid_t item;
+	money_t price;
+} ItemPrice;
 
 
 typedef struct Conversion {
@@ -269,13 +280,16 @@ typedef struct Entity {
 
 
 
+
+#include "market.h"
+
+
+
 typedef struct Economy {
 	tick_t tick;
 
-	// processed every tick
-	VECMP(EcCashflow) cashflow;
 	
-//	size_t entityCounts[ET_MAXVALUE];
+	Market* m;
 	
 	VECMP(EntityDef) entityDefs;
 	VECMP(CompDef) compDefs;
@@ -331,7 +345,14 @@ InvItem* Inv_GetItemP(Inventory* inv, econid_t id);
 InvItem* Inv_AddItem(Inventory* inv, econid_t id, long count);
 InvItem* Inv_AssertItemP(Inventory* inv, econid_t id);
 InvItem* Entity_InvAddItem(Entity* e, econid_t id, long count);
-void Entity_FuseInventories(Entity* e1, Entity* e2); 
+
+EscrowItem* Inv_GetEscrowItemP(Inventory* inv, econid_t owner, econid_t id);
+EscrowItem* Inv_AssertEscrowItemP(Inventory* inv, econid_t owner, econid_t id);
+EscrowItem* Inv_AddEscrowItem(Inventory* inv, econid_t owner, econid_t id, long count);
+long Inv_MoveToEscrow(Inventory* inv, econid_t newOwner, econid_t item, long count);
+long Inv_EscrowChangeOwner(Inventory* inv, econid_t oldOwner, econid_t newOwner, econid_t item, long count);
+
+void Entity_FuseInventories(Entity* e_core, Entity* e_extra); 
 
 Conversion* Econ_NewConversion(Economy* ec);
 long Conv_MaxAvail(Conversion* conv, Inventory* inv);

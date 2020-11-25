@@ -199,10 +199,17 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 					case CT_id: 
 						VEC_PUSH(&fixes, ((struct fixes){j_cval->s, &c->id}));
 						break;
+						
 					case CT_itemRate:
 						LOG("Deferring '%s' at line %d", j_cval->arr.head->v->s, __LINE__);
 						VEC_PUSH(&fixes, ((struct fixes){j_cval->arr.head->v->s, &c->itemRate->item}));
 						c->itemRate->rate = json_as_float(j_cval->arr.head->next->v);
+						break;
+					
+					case CT_itemPrice:
+						LOG("Deferring '%s' at line %d", j_cval->arr.head->v->s, __LINE__);
+						VEC_PUSH(&fixes, ((struct fixes){j_cval->arr.head->v->s, &c->itemPrice->item}));
+						c->itemPrice->price = json_as_int(j_cval->arr.head->next->v);
 						break;
 					
 					case CT_conversion:
@@ -261,7 +268,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 	if(j_convs) {
 		if(j_convs->type != JSON_TYPE_ARRAY) {
 			LOG("Invalid conversion format");
-			return 2;
+			exit(1);
 		}
 	
 		json_link_t* link = j_convs->arr.head;
@@ -281,7 +288,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			json_value_t* j_ins = json_obj_get_val(j_conv, "input");
 			if(!j_ins || j_ins->type != JSON_TYPE_ARRAY || j_ins->len == 0) {
 				LOG("Conversion with invalid input");
-				return 5;
+				exit(1);
 			}
 			
 			c->inputCnt = j_ins->len;
@@ -306,7 +313,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			json_value_t* j_outs = json_obj_get_val(j_conv, "output");
 			if(!j_outs || j_outs->type != JSON_TYPE_ARRAY || j_outs->len == 0) {
 				LOG("Conversion with invalid output");
-				return 5;
+				exit(1);
 			}			
 			
 			c->outputCnt = j_outs->len;
@@ -330,6 +337,37 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			link = link->next;	
 		}
 	}
+	
+	
+	json_value_t* j_market = json_obj_get_val(root, "market");
+	if(j_market) {
+		
+		// market sinks (infinite buyers)
+		json_value_t* j_sinks = json_obj_get_val(j_market, "sinks");
+		if(j_sinks) {
+			json_link_t* link = j_sinks->arr.head;
+			while(link) {
+				json_value_t* v = link->v;
+				
+				long price = json_obj_get_int(v, "maxBuyPrice", 0);
+				MarketSink* s = Market_AddSink(ec->m, 0, price);
+				
+				s->name = json_obj_get_strdup(v, "name");
+				s->maxBuysPerTick = json_obj_get_int(v, "maxBuysPerTick", -1);
+				
+				
+				char* item = json_obj_get_str(v, "item");
+				
+				LOG("Deferring '%s' at line %d", item, __LINE__);
+				VEC_PUSH(&fixes, ((struct fixes){item, &s->item}));
+						
+				
+				link = link->next;
+			}
+		}
+		
+	}
+	
 		
 	
 	// fix all the id string references
@@ -370,9 +408,9 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 		
 		if(ed->fusedInv) {
 			Comp* c = Entity_GetComp(e, ed->fusedInv);
-			Entity* e2 = Econ_GetEntity(ec, c->id);
+			Entity* e_loc = Econ_GetEntity(ec, c->id);
 			
-			Entity_FuseInventories(e, e2);
+			Entity_FuseInventories(e_loc, e);
 		}
 		
 	}
@@ -396,6 +434,7 @@ void Economy_tick(Economy* ec) {
 	
 	int prodtypeid = Econ_CompTypeFromName(ec, "produces");
 	int convtypeid = Econ_CompTypeFromName(ec, "converts");
+	int sellsid = Econ_CompTypeFromName(ec, "sells");
 	
 	
 	VECMP_EACH(&ec->entities, i, e) {
@@ -432,6 +471,18 @@ void Economy_tick(Economy* ec) {
 		}
 		
 		
+		// selling
+		c = Entity_GetComp(e, sellsid);
+		if(c) {
+			InvItem* i = Inv_GetItemP(e->inv, c->itemPrice->item);
+			
+			if(i)
+				Market_AddSellOrder(ec->m, e, i->item, i->count, c->itemPrice->price);
+		}
+		
+		
+		
+		Market_RunSinks(ec->m);
 	}
 	
 	
@@ -445,25 +496,23 @@ void Economy_tick(Economy* ec) {
 void Economy_init(Economy* ec) {
 	memset(ec, 0, sizeof(*ec));
 	
-// 	VECMP_INIT(&ec->cash, MAX_ACTORS);
-	VECMP_INIT(&ec->cashflow, MAX_CASHFLOW);
-	
-// 	VECMP_INIT(&ec->assets, MAX_ASSETS);
-	
-// 	VECMP_INIT(&ec->actors, MAX_ACTORS);
-// 	VECMP_INIT(&ec->cfDescriptions, MAX_CASHFLOW);
+	ec->m = Market_New();
 	
 	VECMP_INIT(&ec->entities, 16384);
 	VECMP_INIT(&ec->conversions, 16384);
 	VECMP_INIT(&ec->compDefs, 16384);
 	VECMP_INIT(&ec->entityDefs, 16384);
 	
-	Economy_LoadConfig(ec, "defs.json");
 	
 	// fill in id 0
 	Econ_NewEntity(ec, 0, "Null Entity");
 	
+	// special entities
+	ec->m->sinkEntity = Econ_NewEntity(ec, 0, "Market Sink Entity");
+	ec->m->sinkEntity->inv = Inv_New();
 	
+	
+	Economy_LoadConfig(ec, "defs.json");	
 }
 
 
