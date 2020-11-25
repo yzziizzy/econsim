@@ -31,7 +31,7 @@ static char g_CompTypeIsPtr[] = {
 int Economy_LoadConfig(Economy* ec, char* path) {
 	json_file_t* jsf = json_load_path(path);
 	if(!jsf) {
-		fprintf(stderr, "File not found: '%s'\n", path);
+		LOG("File not found: '%s'\n", path);
 		return 1;
 	}
 	
@@ -46,16 +46,33 @@ int Economy_LoadConfig(Economy* ec, char* path) {
 int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 	
 	if(root->type != JSON_TYPE_OBJ) {
-		fprintf(stderr, "Invalid config format\n");
+		LOG("Invalid config format\n");
 		return 1;
 	}
 	
+
+	// entity id references are done through string aliases
+	// a lookup table of actual id's is used by a list of
+	//   reference locations to match strings to id's 
+	//   without regard to declaration order 
+	HT(econid_t) nameLookup;
+	HT(Conversion*) conversionLookup;
+	VEC(struct fixes {char* name; econid_t* target;}) fixes;
+	VEC(struct invDefer {Inventory* inv; char* name; long count;}) invDefer;
+	VEC(struct convDefer {char* name; Conversion** target;}) convDefer;
+	
+	HT_init(&nameLookup, 1024);	
+	HT_init(&conversionLookup, 1024);	
+	VEC_INIT(&fixes);
+	VEC_INIT(&invDefer);
+	VEC_INIT(&convDefer);
+
 	
 	// component definitions
 	json_value_t* j_cdefs = json_obj_get_val(root, "component_defs");
 	if(j_cdefs) {
 		if(j_cdefs->type != JSON_TYPE_ARRAY) {
-			fprintf(stderr, "Invalid component_defs format\n");
+			LOG("Invalid component_defs format\n");
 			return 2;
 		}
 	
@@ -69,7 +86,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			int off = 0;
 			char* typestr = json_obj_get_str(link->v, "type");
 			if(typestr[0] == 0) {
-				fprintf(stderr, "Invalid component type\n");
+				LOG("Invalid component type\n");
 				return 3;
 			}
 			
@@ -80,7 +97,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			
 			cd->type = CompInternalTypeFromName(typestr + off);
 			if(cd->type == 0) {
-				fprintf(stderr, "Invalid component internal type: %s\n", typestr);
+				LOG("Invalid component internal type: %s\n", typestr);
 				return 4;
 			} 
 			
@@ -96,7 +113,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 	json_value_t* j_edefs = json_obj_get_val(root, "entity_defs");
 	if(j_edefs) {
 		if(j_edefs->type != JSON_TYPE_ARRAY) {
-			fprintf(stderr, "Invalid entity_defs format\n");
+			LOG("Invalid entity_defs format\n");
 			return 2;
 		}
 	
@@ -106,7 +123,15 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			EntityDef* ed = Economy_NewEntityDef(ec);
 			
 			ed->name = strdup(json_obj_get_str(link->v, "name"));
-						
+			
+			char* fuseName = json_obj_get_str(link->v, "fusedInv");
+			if(fuseName) ed->fusedInv = Econ_CompTypeFromName(ec, fuseName);
+			
+//			LOG(" + %s", fuseName);
+//			if(fuseName) {
+//				VEC_PUSH(&fixes, ((struct fixes){fuseName, &ed->fusedInv}));
+//			}
+			
 			link = link->next;
 		}
 		
@@ -114,25 +139,13 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 	}
 	
 	
-	// entity id references are done through string aliases
-	// a lookup table of actual id's is used by a list of
-	//   reference locations to match strings to id's 
-	//   without regard to declaration order 
-	HT(econid_t) nameLookup;
-	VEC(struct fixes {char* name; econid_t* target;}) fixes;
-	VEC(struct invDefer {Inventory* inv; char* name; long count;}) invDefer;
-	VEC(struct convDefer {char* name; Conversion** target;}) convDefer;
-	
-	HT_init(&nameLookup, 1024);	
-	VEC_INIT(&fixes);
-	VEC_INIT(&invDefer);
 	
 	
 	// load the entities themselves
 	json_value_t* j_ents = json_obj_get_val(root, "entities");
 	if(j_ents) {
 		if(j_ents->type != JSON_TYPE_ARRAY) {
-			fprintf(stderr, "Invalid entity format\n");
+			LOG("Invalid entity format");
 			return 2;
 		}
 	
@@ -143,6 +156,10 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			// read the entity type and create it
 			char* typeName = json_obj_get_str(j_ent, "type");
 			Entity* e = Economy_NewEntityName(ec, typeName, "");
+			if(!e) {
+				LOG("Failed to create entity type %s", typeName);
+				exit(3);
+			}
 			
 			// put the id reference string in the lookup for later
 			char* idString = json_obj_get_str(j_ent, "id");
@@ -170,7 +187,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 							
 				switch(cd->type) {
 					default:
-						fprintf(stderr, "unknown component type: %d\n", cd->type);
+						LOG("unknown component type: %d", cd->type);
 						exit(1);
 					
 					case CT_float: c->d = json_as_double(j_cval); break;
@@ -183,12 +200,16 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 						VEC_PUSH(&fixes, ((struct fixes){j_cval->s, &c->id}));
 						break;
 					case CT_itemRate:
-						VEC_PUSH(&fixes, ((struct fixes){j_cval->s, &c->itemRate->item}));
+						LOG("Deferring '%s' at line %d", j_cval->arr.head->v->s, __LINE__);
+						VEC_PUSH(&fixes, ((struct fixes){j_cval->arr.head->v->s, &c->itemRate->item}));
 						c->itemRate->rate = json_as_float(j_cval->arr.head->next->v);
 						break;
 					
 					case CT_conversion:
-						
+						c->convertRate->acc = 0;
+						c->convertRate->rate = json_as_float(j_cval->arr.head->v);
+						LOG("Deferring '%s' at line %d", j_cval->arr.head->next->v->s, __LINE__);
+						VEC_PUSH(&convDefer, ((struct convDefer){j_cval->arr.head->next->v->s, &c->convertRate->c}));		
 						break;
 						
 					case CT_roadspan:
@@ -222,6 +243,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 					count = json_as_int(j_item->arr.head->next->v);
 					
 					if(!e->inv) e->inv = Inv_New();
+					LOG("Deferring '%s' at line %d", itemName, __LINE__);
 					VEC_PUSH(&invDefer, ((struct invDefer){e->inv, itemName, count}));
 					
 					ilink = ilink->next;
@@ -238,7 +260,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 	json_value_t* j_convs = json_obj_get_val(root, "conversions");
 	if(j_convs) {
 		if(j_convs->type != JSON_TYPE_ARRAY) {
-			fprintf(stderr, "Invalid conversion format\n");
+			LOG("Invalid conversion format");
 			return 2;
 		}
 	
@@ -252,13 +274,13 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			
 			char* idString = json_obj_get_str(j_conv, "id");
 			if(idString) {
-				HT_set(&nameLookup, idString, c->id);
+				HT_set(&conversionLookup, idString, c);
 			}
 			
 			// add the inputs
 			json_value_t* j_ins = json_obj_get_val(j_conv, "input");
 			if(!j_ins || j_ins->type != JSON_TYPE_ARRAY || j_ins->len == 0) {
-				fprintf(stderr, "Conversion with invalid input\n");
+				LOG("Conversion with invalid input");
 				return 5;
 			}
 			
@@ -271,6 +293,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 				json_value_t* v = ilink->v;
 				
 				char* idString = v->arr.head->v->s;
+				LOG("Deferring '%s' at line %d", idString, __LINE__);
 				VEC_PUSH(&fixes, ((struct fixes){idString, &c->inputs[n].item}));
 				c->inputs[n].count = json_as_int(v->arr.tail->v);
 				
@@ -282,7 +305,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 			// add the outputs
 			json_value_t* j_outs = json_obj_get_val(j_conv, "output");
 			if(!j_outs || j_outs->type != JSON_TYPE_ARRAY || j_outs->len == 0) {
-				fprintf(stderr, "Conversion with invalid output\n");
+				LOG("Conversion with invalid output");
 				return 5;
 			}			
 			
@@ -295,6 +318,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 				json_value_t* v = ilink->v;
 				
 				char* idString = v->arr.head->v->s;
+				LOG("Deferring '%s' at line %d", idString, __LINE__);
 				VEC_PUSH(&fixes, ((struct fixes){idString, &c->outputs[n].item}));
 				c->outputs[n].count = json_as_int(v->arr.tail->v);
 				
@@ -312,7 +336,7 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 	VEC_EACH(&fixes, i, fix) {
 		econid_t id;
 		if(HT_get(&nameLookup, fix.name, &id)) {
-			fprintf(stderr, "Unknown entity reference: '%s'\n", fix.name);
+			LOG("Unknown entity reference: '%s'", fix.name);
 			continue;
 		}
 		
@@ -322,17 +346,45 @@ int Economy_LoadConfigJSON(Economy* ec, json_value_t* root) {
 	VEC_EACH(&invDefer, i, defer) {
 		econid_t id;
 		if(HT_get(&nameLookup, defer.name, &id)) {
-			fprintf(stderr, "Unknown entity reference: '%s'\n", defer.name);
+			LOG("Unknown entity reference: '%s'", defer.name);
 			continue;
 		}
 		
 		Inv_AddItem(defer.inv, id, defer.count);
 	}
 	
+	VEC_EACH(&convDefer, i, defer) {
+		Conversion* c;
+		if(HT_get(&conversionLookup, defer.name, &c)) {
+			LOG("Unknown conversion reference: '%s'", defer.name);
+			continue;
+		}
+		
+		*defer.target = c;
+	}
 	
+	
+	// fuse inventories
+	VECMP_EACH(&ec->entities, i, e) {
+		EntityDef* ed = Economy_GetEntityDef(ec, e->type);
+		
+		if(ed->fusedInv) {
+			Comp* c = Entity_GetComp(e, ed->fusedInv);
+			Entity* e2 = Econ_GetEntity(ec, c->id);
+			
+			Entity_FuseInventories(e, e2);
+		}
+		
+	}
+	
+	
+	
+	
+	VEC_FREE(&convDefer);
 	VEC_FREE(&invDefer);
 	VEC_FREE(&fixes);
 	HT_destroy(&nameLookup);
+	HT_destroy(&conversionLookup);
 
 	return 0;
 }
@@ -364,11 +416,18 @@ void Economy_tick(Economy* ec) {
 		c = Entity_GetComp(e, convtypeid);
 		if(c) {
 			ConvertRate* cr = c->convertRate;
-			if(++c->itemRate->acc >= c->itemRate->rate) {
-				int n = c->itemRate->acc / c->itemRate->rate;
-				Entity_InvAddItem(e, c->itemRate->item, n);
+			Conversion* v = cr->c;
+			
+			if(++cr->acc >= cr->rate) {
 				
-				c->itemRate->acc -= c->itemRate->rate * n;
+				int cnt = Conv_MaxAvail(v, e->inv);
+				if(cnt > 0) {
+					int n = cr->acc / cr->rate;
+					n = MIN(n, cnt);
+					Conv_DoConversion(v, e->inv, n);
+					
+					cr->acc -= cr->rate * n;
+				}
 			}
 		}
 		

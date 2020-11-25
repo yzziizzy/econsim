@@ -16,6 +16,7 @@ int Economy_EntityType(Economy* ec, char* typeName) {
 
 Entity* Economy_NewEntityName(Economy* ec, char* typeName, char* name) {
 	int type = Economy_EntityType(ec, typeName);
+	if(type < 0) return NULL;
 	return Econ_NewEntity(ec, type, name);
 }
 
@@ -30,6 +31,15 @@ EntityDef* Economy_NewEntityDef(Economy* ec) {
 	ed->id = id;
 	
 	return ed;
+}
+
+
+EntityDef* Economy_GetEntityDef(Economy* ec, int typeid) {
+	VECMP_EACH(&ec->entityDefs, i, ed) {
+		if(typeid == ed->id) return ed;
+	}
+	
+	return NULL;
 }
 
 	
@@ -53,6 +63,9 @@ Entity* Econ_NewEntity(Economy* ec, int type, char* name) {
 	return e;
 }
 
+Entity* Econ_GetEntity(Economy* ec, econid_t id) {
+	return &VECMP_ITEM(&ec->entities, id);
+}
 
 econid_t Econ_FindItem(Economy* ec, char* name) {
 	int etype = Economy_EntityType(ec, "Item");
@@ -92,6 +105,10 @@ void Inv_Init(Inventory* inv) {
 	VECMP_INIT(&inv->items, 1024); // max types of items in inv 
 }
 
+void Inv_Destroy(Inventory* inv) {
+	VECMP_FREE(&inv->items); 
+}
+
 
 InvItem* Inv_GetItemP(Inventory* inv, econid_t id) {
 	if(!inv) return NULL;
@@ -128,6 +145,36 @@ InvItem* Inv_AddItem(Inventory* inv, econid_t id, long count) {
 }
 
 
-
+void Entity_FuseInventories(Entity* e1, Entity* e2) {
+	Inventory* inv1 = e1->inv;
+	Inventory* inv2 = e2->inv;
+	
+	// simple cases where one or both inv's are NULL
+	if(!inv1 && !inv2) {
+		inv1 = Inv_New();
+		e1->inv = inv1;
+		e1->inv = inv2;
+		return;
+	}
+	
+	if(!inv1) {
+		e1->inv = inv2;
+		return;
+	}
+	if(!inv2) {
+		e2->inv = inv1;
+		return;
+	}
+	
+	// combine contents
+	VECMP_EACH(&inv2->items, i, it) {
+		Inv_AddItem(inv1, it->item, it->count);
+	}
+	
+	Inv_Destroy(inv2);
+	free(inv2);
+	
+	e1->inv = inv1;
+}
 
 

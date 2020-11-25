@@ -240,6 +240,8 @@ typedef struct Comp {
 typedef struct EntityDef {
 	int id;
 	char* name;
+	
+	econid_t fusedInv;
 		
 	VEC(struct {
 		int defID;
@@ -297,6 +299,8 @@ Entity* Econ_NewEntity(Economy* ec, int type, char* name);
 Entity* Economy_NewEntityName(Economy* ec, char* typeName, char* name);
 int Economy_EntityType(Economy* ec, char* typeName);
 EntityDef* Economy_NewEntityDef(Economy* ec);
+EntityDef* Economy_GetEntityDef(Economy* ec, int typeid);
+Entity* Econ_GetEntity(Economy* ec, econid_t id);
 
 CompDef* Economy_NewCompDef(Economy* ec);
 CompDef* Econ_GetCompDef(Economy* ec, int compType);
@@ -322,33 +326,25 @@ econid_t Econ_FindItem(Economy* ec, char* name);
 
 void Inv_Init(Inventory* inv);
 Inventory* Inv_New();
+void Inv_Destroy(Inventory* inv);
 InvItem* Inv_GetItemP(Inventory* inv, econid_t id);
 InvItem* Inv_AddItem(Inventory* inv, econid_t id, long count);
 InvItem* Inv_AssertItemP(Inventory* inv, econid_t id);
 InvItem* Entity_InvAddItem(Entity* e, econid_t id, long count);
+void Entity_FuseInventories(Entity* e1, Entity* e2); 
 
 Conversion* Econ_NewConversion(Economy* ec);
+long Conv_MaxAvail(Conversion* conv, Inventory* inv);
+long Conv_DoConversion(Conversion* conv, Inventory* inv, long count);
 
 
-/*
-// tick loop functions
-#define X(type, a) void tick##type(Economy* ec);
-	ENTITY_TYPE_LIST
-#undef X
-
-#define X(type, a) entityid_t Econ_NewEnt##type(Economy* ec, type** out);
-	ENTITY_TYPE_LIST
-#undef X
-
-#define X(type, a) compid_t Econ_NewComp##type(Economy* ec, type** out);
-	COMP_TYPE_LIST
-#undef X
 
 
-#define X(type, a) type* Econ_GetComp##type(Economy* ec, compid_t id);
-	COMP_TYPE_LIST
-#undef X
-*/
+
+
+
+
+
 void Economy_tick(Economy* ec);
 /*
 econid_t Economy_AddActor(Economy* ec, char* name, money_t cash);

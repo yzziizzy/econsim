@@ -1,6 +1,4 @@
 {
-
-
 component_defs: [
 	{name: "name", type: "str", default: 0},
 	{name: "cash", type: "int", default: 0},
@@ -25,11 +23,12 @@ component_defs: [
 	
 ],
 entity_defs: [
+	{name: "Road", defaultComps: [ ]},
 	{name: "Person", defaultComps: ["location", ]},
 	{name: "Parcel", defaultComps: ["location", ]},
 	{name: "Mine", defaultComps: ["location", "produces"]},
 	{name: "Forest", defaultComps: ["location", "produces"]},
-	{name: "LoggingCamp", defaultComps: ["location", "produces"]},
+	{name: "LoggingCamp", fusedInv: 'location', defaultComps: ["location", "produces"]},
 	{name: "Factory", defaultComps: ["location", "produces"]},
 	
 	{name: "Item", defaultComps: ["weight", "volume"]},
@@ -37,7 +36,7 @@ entity_defs: [
 ],
 conversions: [
 	{id: '>lumberjack', name: 'Lumberjack', input: [['@tree', 1]], output: [['@log', 2]]},
-	{id: '>sawmill', name: 'Sawmill', input: [['@log', 1]], output: [['@boards', 10], ['@sawdust', 1]]},
+	{id: '>sawmill', name: 'Sawmill', input: [['@log', 1]], output: [['@board', 10], ['@sawdust', 1]]},
 ],
 entities: [
 	{id: '@ironore', type: "Item", comps: [["name", "Iron Ore"], ["weight", 12], ['volume', 1] ], },
@@ -45,20 +44,21 @@ entities: [
 	{id: '@steel',   type: "Item", comps: [["name", "Steel"],    ["weight", 12], ['volume', 1] ], },
 	{id: '@tree',    type: "Item", comps: [["name", "Tree"],     ["weight", 2],  ['volume', 10] ], },
 	{id: '@log',     type: "Item", comps: [["name", "Log"],      ["weight", 1],  ['volume', 5] ], },
-	{id: '@sawdust', type: "Item", comps: [["name", "Sawdust"],  ["weight", 1],  ['volume', 1] ], },
+	{id: '@board',   type: "Item", comps: [["name", "Board"],    ["weight", .1], ['volume', 1] ], },
+	{id: '@sawdust', type: "Item", comps: [["name", "Sawdust"],  ["weight", .1], ['volume', 1] ], },
 	
-	{type: "Person", comps: [["name", "Alvin"], ["cash", 372], ], id: '@alvin', },
-	{type: "Person", comps: [["name", "Betty"], ["cash", 23], ]},
-	{type: "Person", comps: [["name", "Chuck"], ["cash", 102405], ]},
-	{type: "Person", comps: [["name", "Daryl"], ["cash", 5], ]},
-	{type: "Person", comps: [["name", "Ellen"], ["cash", 0], ]},
-	{type: "Person", comps: [["name", "Frank"], ["cash", 4550], ]},
-	{type: "Person", comps: [["name", "Ginny"], ["cash", 1215], ]},
+	{type: "Person", comps: [["name", "Alvin"], ["cash", 372], ],   id: '@alvin', },
+	{type: "Person", comps: [["name", "Betty"], ["cash", 23], ],    id: '@betty', },
+	{type: "Person", comps: [["name", "Chuck"], ["cash", 102405],], id: '@chuck', },
+	{type: "Person", comps: [["name", "Daryl"], ["cash", 5], ],     id: '@daryl', },
+	{type: "Person", comps: [["name", "Ellen"], ["cash", 0], ],     id: '@ellen', },
+	{type: "Person", comps: [["name", "Frank"], ["cash", 4550],],   id: '@frank', },
+	{type: "Person", comps: [["name", "Ginny"], ["cash", 1215],],   id: '@ginny', },
 	
 	{type: "Mine", comps: [["name", "Big-O"], ['produces', ['@ironore', 0.19]], ['owner', '@alvin'], ]},
 	{type: "Mine", comps: [["name", "Big-D"], ['produces', ['@ironore', 2.5]], ]},
 	
-	{type: "LoggingCamp", comps: [["name", "Big-D"], ['converts', '>lumberjack']]},
+	{type: "LoggingCamp", comps: [["name", "Big-D"], ['converts', [3, '>lumberjack']], ['location', '@bforest'], ]},
 	
 	{id: '@bforest', type: "Forest", 
 		comps: [["name", "Black Forest"], ['acres', 100]],

@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
 	} View;
 	
 	View views[] = {
-		{.name = "Forest", .dispName = "Forests", .cols = (char*[]){"name", "!Tree", NULL} },
+		{.name = "Forest", .dispName = "Forests", .cols = (char*[]){"name", "!Tree", "!Log", NULL} },
 		{.name = "Person", .dispName = "People", .cols = (char*[]){"name", "cash", NULL} },
 		{.name = "Mine", .dispName = "Mines", .cols = (char*[]){"name", "!Iron Ore", NULL} },
 		
@@ -192,9 +192,11 @@ static void print_entity(Economy* ec, Entity* e, int width, int offset, char** c
 		move(y, x + (width * n));
 		
 		if(cols[i][0] == '!') {
+//			LOG("inv");
 			int itemid = Econ_FindItem(ec, cols[i] + 1);
-			
+//			LOG(" - %d", itemid);
 			InvItem* item = Inv_GetItemP(e->inv, itemid);
+//			LOG(" -- %p", item);
 			if(item)
 				printw("%ld", item->count);
 		}
